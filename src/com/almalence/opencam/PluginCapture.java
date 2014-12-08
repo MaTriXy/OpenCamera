@@ -14,34 +14,36 @@ The Original Code is collection of files collectively known as Open Camera.
 The Initial Developer of the Original Code is Almalence Inc.
 Portions created by Initial Developer are Copyright (C) 2013 
 by Almalence Inc. All Rights Reserved.
-*/
+ */
 
 /* <!-- +++
-package com.almalence.opencam_plus;
-+++ --> */
+ package com.almalence.opencam_plus;
+ import com.almalence.opencam_plus.cameracontroller.CameraController;
+ +++ --> */
 // <!-- -+-
 package com.almalence.opencam;
+
+import com.almalence.opencam.cameracontroller.CameraController;
 //-+- -->
 
 import java.util.Date;
 
-import com.almalence.opencam.cameracontroller.CameraController;
-
-import android.hardware.Camera;
-import android.media.Image;
-
 public abstract class PluginCapture extends Plugin
 {
-	protected boolean takingAlready=false;
-	protected boolean inCapture;
-	
-	public PluginCapture(String ID,
-						 int preferenceID,
-						 int advancedPreferenceID,
-						 int quickControlID,
-						 String quickControlInitTitle)
+	protected boolean	inCapture;
+	protected boolean	aboutToTakePicture	= false;
+	protected int		imagesTaken			= 0;
+	protected int		imagesTakenRAW			= 0;
+
+	public boolean getInCapture()
 	{
-		super(ID, preferenceID, advancedPreferenceID, quickControlID, quickControlInitTitle);		
+		return inCapture;
+	}
+
+	public PluginCapture(String ID, int preferenceID, int advancedPreferenceID, int quickControlID,
+			String quickControlInitTitle)
+	{
+		super(ID, preferenceID, advancedPreferenceID, quickControlID, quickControlInitTitle);
 	}
 
 	public boolean muteSound()
@@ -50,53 +52,79 @@ public abstract class PluginCapture extends Plugin
 	}
 
 	@Override
-	public void OnShutterClick()
+	public void addToSharedMemExifTags(byte[] frameData)
 	{
-		if (inCapture == false)
-        {
-			Date curDate = new Date();
-			SessionID = curDate.getTime();
-			
-			MainScreen.thiz.MuteShutter(true);
-			
-			int focusMode = CameraController.getInstance().getFocusMode();
-			if(focusMode != -1 && takingAlready == false && (CameraController.getFocusState() == CameraController.FOCUS_STATE_IDLE ||
-					CameraController.getFocusState() == CameraController.FOCUS_STATE_FOCUSING)
-					&& !(focusMode == CameraParameters.AF_MODE_CONTINUOUS_PICTURE ||
-	      				focusMode == CameraParameters.AF_MODE_CONTINUOUS_VIDEO ||
-	    				focusMode == CameraParameters.AF_MODE_INFINITY ||
-	    				focusMode == CameraParameters.AF_MODE_FIXED ||
-	    				focusMode == CameraParameters.AF_MODE_EDOF)
-        			&& !MainScreen.getAutoFocusLock())
-				takingAlready = true;			
-			else if(takingAlready == false)
-			{
-				takePicture();
-			}
-        }
+		// frameData is jpeg array or null.
+		if (imagesTaken == 0)
+		{
+			if (frameData != null)
+				PluginManager.getInstance().addToSharedMemExifTagsFromJPEG(frameData, SessionID, -1);
+			else
+				PluginManager.getInstance().addToSharedMemExifTagsFromCamera(SessionID);
+		}
 	}
-	
-	public void takePicture(){}
-	
-	@Override
-	public abstract void onAutoFocus(boolean paramBoolean);
-	
-	@Override
-	public abstract void onPictureTaken(byte[] paramArrayOfByte, Camera paramCamera);
 
 	@Override
-	public abstract void onImageAvailable(Image im);
-	
+	public void onResume()
+	{
+		inCapture = false;
+		aboutToTakePicture = false;
+	}
+
 	@Override
-	public abstract void onPreviewFrame(byte[] data, Camera paramCamera);
-	
+	public void onShutterClick()
+	{
+		if (!inCapture)
+		{
+			inCapture = true;
+
+			MainScreen.getGUIManager().lockControls = true;
+			Date curDate = new Date();
+			SessionID = curDate.getTime();
+
+			MainScreen.getInstance().muteShutter(true);
+
+			if (CameraController.isAutoFocusPerform())
+				aboutToTakePicture = true;
+			else
+				takePicture();
+		}
+	}
+
+	@Override
+	public void onExportFinished()
+	{
+	}
+
+	public void takePicture()
+	{
+	}
+
+	@Override
+	public void onAutoFocus(boolean paramBoolean)
+	{
+		if (inCapture)
+		{
+			if (aboutToTakePicture)
+				takePicture();
+
+			aboutToTakePicture = false;
+		}
+	}
+
+	@Override
+	public abstract void onImageTaken(int frame, byte[] frameData, int frame_len, int format);
+
+	@Override
+	public abstract void onPreviewFrame(byte[] data);
+
 	public boolean shouldPreviewToGPU()
 	{
 		return false;
 	}
-	
+
 	public void onFrameAvailable()
 	{
-		
+
 	}
 }

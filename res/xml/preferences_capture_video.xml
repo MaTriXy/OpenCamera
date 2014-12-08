@@ -2,18 +2,6 @@
  
 <PreferenceCategory android:title="@string/Pref_Video_Category_Title"
     				android:key="Pref_VideoCapture_Category">   
-    	<ListPreference
-			android:title="@string/Pref_Video_ImageSize_Title"
-			android:key="imageSizePrefVideoFront"
-			android:defaultValue="2"
-			android:entries="@array/dimsArrayVideo"
-			android:entryValues="@array/dimsValuesVideo" />
-    	<ListPreference
-			android:title="@string/Pref_Video_ImageSize_Title"
-			android:key="imageSizePrefVideoBack"
-			android:defaultValue="2"
-			android:entries="@array/dimsArrayVideo"
-			android:entryValues="@array/dimsValuesVideo" />
     	<CheckBoxPreference
             android:title="@string/Pref_Video_Stabilization_Title"
             android:defaultValue="false"
@@ -23,5 +11,18 @@
             android:defaultValue="false"
             android:summary="@string/Pref_Video_StartStandard_Summary"
             android:key="videoStartStandardPref" />
+    	
+    	<CheckBoxPreference
+            android:title="@string/Pref_Video_ShowLandscapeNotification_Title"
+            android:defaultValue="true"
+            android:summary="@string/Pref_Video_ShowLandscapeNotification_Summary"
+            android:key="showLandscapeNotification" />
+    	
+    	<CheckBoxPreference
+            android:title="@string/Pref_Video_Mute_Title"
+            android:defaultValue="false"
+            android:summary="@string/Pref_Video_Mute_Summary"
+            android:key="preferenceVideoMuteMode" />
+    	
 </PreferenceCategory>
 </PreferenceScreen>

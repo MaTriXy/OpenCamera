@@ -114,27 +114,37 @@
 				</LinearLayout>
 			</RelativeLayout>
 		
-          	<LinearLayout android:layout_height="@dimen/shutterHeight"
+          	<LinearLayout 
+          	    android:layout_height="@dimen/shutterHeight"
 	 	 	    android:layout_width="match_parent"
 	 	 	    android:orientation="vertical"
-	 	 	    android:gravity="bottom"	    			 	 	    
+	 	 	    android:gravity="center"	
+	 	 	    android:layout_gravity="bottom"	    			 	 	    
 				android:layout_weight="1">
 				
-	 	 	<com.almalence.ui.RotateImageView
-				android:id="@+id/buttonShutter"
-				android:src="@drawable/button_shutter"				
-				android:background="@android:color/transparent"			
-				android:layout_height="@dimen/shutterHeight"
-				android:layout_width="@dimen/shutterHeight"
-				android:scaleType="fitXY"
-				android:paddingLeft="0dp"
-				android:paddingRight="0dp"
-				android:paddingBottom="0dp"
-				android:paddingTop="0dp"
-		   		android:layout_gravity="center_horizontal"
-		   		android:onClick="onButtonClick">
-		 	</com.almalence.ui.RotateImageView>
-		 	</LinearLayout>	 	
+          	    <LinearLayout 
+	          	    android:id="@+id/buttonShutterContainer"
+	          	    android:layout_height="@dimen/shutterHeight"
+		 	 	    android:layout_width="wrap_content"
+		 	 	    android:orientation="vertical"
+		 	 	    android:gravity="bottom"	
+		 	 	    android:layout_gravity="center">
+          	    
+			 	 	<com.almalence.ui.RotateImageView
+						android:id="@+id/buttonShutter"
+						android:src="@drawable/button_shutter"				
+						android:background="@android:color/transparent"			
+						android:layout_height="@dimen/shutterHeight"
+						android:layout_width="@dimen/shutterHeight"
+						android:scaleType="fitXY"
+						android:paddingLeft="0dp"
+						android:paddingRight="0dp"
+						android:paddingBottom="0dp"
+						android:paddingTop="0dp"
+				   		android:layout_gravity="bottom"
+				   		android:onClick="onButtonClick"/>
+	 	 	   </LinearLayout>	 	
+		 	</LinearLayout> 	
 		 	
 	 	 	<LinearLayout android:layout_height="@dimen/paramsLayoutHeight"
 	 	 	    android:layout_width="match_parent"
@@ -153,7 +163,42 @@
 		 	</com.almalence.ui.RotateImageView>
 		 	</LinearLayout>
  	</LinearLayout>
-	 	      
+      
+    <RelativeLayout 
+		android:id="@+id/mainButtonsVideo"
+       	android:background="@drawable/blacktransparentlayerbottom"
+       	android:layout_weight="1"
+		android:layout_width="match_parent"
+		android:layout_height="@dimen/paramsLayoutVideoHeight"
+		android:gravity="bottom|center"	    
+	   	android:layout_alignParentBottom="true"
+		android:visibility="gone">
+          	<com.almalence.ui.RotateImageView
+				android:id="@+id/buttonVideoPause"
+				android:src="@drawable/plugin_capture_video_pause"									
+				android:background="@android:color/transparent"
+				android:layout_height="@dimen/paramsLayoutHeight"
+				android:layout_width="@dimen/paramsLayoutHeight"
+				android:scaleType="fitCenter"
+				android:layout_toLeftOf="@+id/buttonVideoStop"
+				android:layout_marginRight="30dip"
+				android:layout_marginBottom="30dip"
+				android:layout_centerVertical="true"
+				>
+			</com.almalence.ui.RotateImageView>
+          	<com.almalence.ui.RotateImageView
+				android:id="@+id/buttonVideoStop"
+				android:src="@drawable/plugin_capture_video_stop_square"
+				android:background="@android:color/transparent"
+				android:layout_height="@dimen/paramsLayoutHeight"
+				android:layout_width="@dimen/paramsLayoutHeight"
+				android:scaleType="fitCenter"
+				android:layout_centerInParent="true"
+				android:layout_marginBottom="30dip"
+		   		>
+			</com.almalence.ui.RotateImageView>
+	</RelativeLayout>
+	
     <RelativeLayout
        android:id="@+id/fullscreenLayout"
        android:layout_width="fill_parent"
@@ -333,34 +378,31 @@
    		android:layout_gravity="top|left"
    		android:visibility="gone"/>	
 
-	<RelativeLayout android:id="@+id/storeLayout"
-        		android:background="@drawable/store_background"
-        		android:layout_width="fill_parent"
-        		android:layout_height="fill_parent"        		
-				android:visibility="gone">
-					<ImageView
-						android:id="@+id/storeHeader"
-						android:src="@drawable/store_header_large"
-						android:background="@android:color/transparent"
-						android:layout_height="@dimen/headerStoreImageSize"
-						android:layout_width="fill_parent"
-						android:layout_alignParentTop="true"
-						android:layout_centerHorizontal="true"
-				   		>
-					</ImageView>
-					<GridView
-					    android:id="@+id/storeGrid"
-					    android:layout_width="fill_parent" 
-					    android:layout_height="wrap_content"
-					    android:numColumns="4"
-					    android:horizontalSpacing="8dp"
-					    android:verticalSpacing="8dp"
-					    android:adjustViewBounds="true"
-					    android:stretchMode="columnWidth"
-					    android:layout_below="@+id/storeHeader"
-					    android:paddingLeft="8dp"
-	    				android:paddingRight="8dp"
-					/>
+	<RelativeLayout
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:id="@+id/viewPagerLayoutMain"
+        android:background="@drawable/store_background"
+        android:visibility="gone"
+		>
+		<ImageView
+			android:id="@+id/storeHeader"
+			android:src="@drawable/store_header"
+			android:background="@android:color/transparent"
+			android:layout_height="@dimen/headerStoreImageSize"
+			android:layout_width="match_parent"
+			android:layout_alignParentTop="true"
+			android:layout_centerHorizontal="true"
+	   		>
+		</ImageView>
+		<RelativeLayout
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:id="@+id/viewPagerLayout"
+	        android:background="@drawable/store_background"
+	        android:layout_below="@+id/storeHeader"
+			>
+	 	</RelativeLayout>
 	</RelativeLayout>
 	 
 	<RelativeLayout
@@ -786,7 +828,7 @@
 			</ImageView>
 			
             <TextView
-				android:id="@+id/textDown"
+				android:id="@+id/textDownHintBottom"
 				android:text="@string/layout_hint_bottom"
 				android:textSize="18sp"
 				android:textColor="#00B6E8"
@@ -806,10 +848,11 @@
 		
 	<RelativeLayout android:id="@+id/mode_help"
 			android:layout_width="fill_parent"
-			android:layout_height="600dip"
+			android:layout_height="700dip"
 			android:layout_margin="20dip"
 			android:background="#FAFAFA"
 			android:visibility="gone"
+			android:layout_centerInParent="true"
 			>
             
 	    	<TextView

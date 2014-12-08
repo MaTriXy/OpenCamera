@@ -2,9 +2,9 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"    
     android:id="@+id/guiAlmalenceLayout1"
     android:orientation="vertical"
-    android:layout_width="fill_parent"
+    android:layout_width="match_parent"
     android:background="@android:color/transparent"
-    android:layout_height="fill_parent">
+    android:layout_height="match_parent">
     
     
     <RelativeLayout
@@ -41,8 +41,8 @@
 
     <RelativeLayout
 		android:id="@+id/blockingLayout"
-		android:layout_width="fill_parent"
-		android:layout_height="fill_parent"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
 		android:orientation="vertical"		    
 		android:background="#97000000"
 		android:visibility="gone">
@@ -57,8 +57,8 @@
     
 	<RelativeLayout
 		android:id="@+id/postprocessingLayout"
-		android:layout_width="fill_parent"
-		android:layout_height="fill_parent"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
 		android:orientation="vertical"    
 		android:background="@android:color/transparent"   
 		android:visibility="gone">
@@ -67,7 +67,7 @@
       <LinearLayout
 		android:id="@+id/mainButtons"
 	    android:orientation="horizontal"
-	    android:layout_width="fill_parent"
+	    android:layout_width="match_parent"
 	    android:layout_height="wrap_content"
 	    android:background="@drawable/blacktransparentlayerbottom"
 	    android:gravity="bottom"	    
@@ -144,19 +144,6 @@
 				   		android:layout_gravity="bottom"
 				   		android:onClick="onButtonClick"/>
 					
-		 	 	   <com.almalence.ui.RotateImageView
-						android:id="@+id/buttonShutterAdditional"
-						android:visibility="gone"
-						android:src="@drawable/gui_almalence_shutter_additional_video"				
-						android:background="@android:color/transparent"			
-						android:layout_height="@dimen/videoAdditionalShutterHeight"
-						android:layout_width="@dimen/videoAdditionalShutterHeight"
-						android:scaleType="fitXY"
-						android:paddingLeft="0dp"
-						android:paddingRight="0dp"
-						android:paddingBottom="0dp"
-						android:paddingTop="0dp"
-				   		android:layout_gravity="center_horizontal"/>
 	 	 	   </LinearLayout>	 	
 		 	</LinearLayout>	 	
 		 	
@@ -165,23 +152,59 @@
 	 	 	    android:orientation="vertical"
 	 	 	    android:gravity="center"	    			 	 	    
 				android:layout_weight="1">
-	 	 	<com.almalence.ui.RotateImageView
-				android:id="@+id/buttonSelectMode"
-				android:src="@drawable/button_selectmode"
-				android:layout_gravity="center_horizontal"
-				android:background="@android:color/transparent"
-				android:layout_height="@dimen/paramsLayoutHeight"
-				android:layout_width="@dimen/paramsLayoutHeight"	
-				android:scaleType="fitXY"							
-		   		android:onClick="onButtonClick">
-		 	</com.almalence.ui.RotateImageView>
+		 	 	<com.almalence.ui.RotateImageView
+					android:id="@+id/buttonSelectMode"
+					android:src="@drawable/button_selectmode"
+					android:layout_gravity="center_horizontal"
+					android:background="@android:color/transparent"
+					android:layout_height="@dimen/paramsLayoutHeight"
+					android:layout_width="@dimen/paramsLayoutHeight"	
+					android:scaleType="fitXY"							
+			   		android:onClick="onButtonClick">
+			 	</com.almalence.ui.RotateImageView>
 		 	</LinearLayout>
  	</LinearLayout>
+ 	
+
+    <RelativeLayout 
+		android:id="@+id/mainButtonsVideo"
+       	android:background="@drawable/blacktransparentlayerbottom"
+       	android:layout_weight="1"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:gravity="bottom|center"	    
+	   	android:layout_alignParentBottom="true"
+		android:visibility="gone">
+          	<com.almalence.ui.RotateImageView
+				android:id="@+id/buttonVideoPause"
+				android:src="@drawable/plugin_capture_video_pause"									
+				android:background="@android:color/transparent"
+				android:layout_height="@dimen/paramsLayoutHeight"
+				android:layout_width="@dimen/paramsLayoutHeight"
+				android:scaleType="fitCenter"
+				android:layout_toLeftOf="@+id/buttonVideoStop"
+				android:layout_marginRight="20dip"
+				android:layout_marginBottom="15dip"
+				android:layout_centerVertical="true"
+				>
+			</com.almalence.ui.RotateImageView>
+          	<com.almalence.ui.RotateImageView
+				android:id="@+id/buttonVideoStop"
+				android:src="@drawable/plugin_capture_video_stop_square"
+				android:background="@android:color/transparent"
+				android:layout_height="@dimen/paramsLayoutHeight"
+				android:layout_width="@dimen/paramsLayoutHeight"
+				android:scaleType="fitCenter"
+				android:layout_centerInParent="true"
+				android:layout_marginBottom="15dip"
+		   		>
+			</com.almalence.ui.RotateImageView>
+	</RelativeLayout>
 	 	      
     <RelativeLayout
        android:id="@+id/fullscreenLayout"
-       android:layout_width="fill_parent"
-       android:layout_height="fill_parent"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent"
        android:orientation="vertical"    
        android:background="@android:color/transparent"   
        android:visibility="gone">
@@ -190,7 +213,7 @@
       <LinearLayout
        android:id="@+id/infoLayout"
        android:layout_width="@dimen/infoLayoutWidth"
-       android:layout_height="fill_parent"
+       android:layout_height="match_parent"
        android:layout_below="@+id/paramsLayout"
        android:layout_above="@+id/mainButtons"
        android:layout_alignParentRight="true"
@@ -205,8 +228,8 @@
 	     Viewfinder plugin is able to put view into any place on layout, not only in its zone -->
 	<RelativeLayout
 	    android:id="@+id/pluginsLayout"	    	    
-	    android:layout_width="fill_parent"
-	    android:layout_height="fill_parent"
+	    android:layout_width="match_parent"
+	    android:layout_height="match_parent"
 	    android:layout_above="@+id/mainButtons"
 	    android:layout_below="@+id/paramsLayout"	    
 	    android:layout_toLeftOf="@+id/infoLayout"
@@ -218,8 +241,8 @@
 		
 	<RelativeLayout
        android:id="@+id/specialPluginsLayout"
-       android:layout_width="fill_parent"
-       android:layout_height="fill_parent"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent"
        android:orientation="vertical"
        android:background="@android:color/transparent"   
        android:visibility="visible" >
@@ -227,8 +250,8 @@
 	
 	<RelativeLayout
        android:id="@+id/specialPluginsLayout2"
-       android:layout_width="fill_parent"
-       android:layout_height="fill_parent"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent"
        android:layout_above="@+id/mainButtons"
        android:orientation="vertical"
        android:background="@android:color/transparent"   
@@ -237,8 +260,8 @@
 	
 	<RelativeLayout
 	    android:id="@+id/specialPluginsLayout3"	    	    
-	    android:layout_width="fill_parent"
-	    android:layout_height="fill_parent"
+	    android:layout_width="match_parent"
+	    android:layout_height="match_parent"
 	    android:layout_above="@+id/mainButtons"
 	    android:layout_below="@+id/paramsLayout"	    
 	    android:layout_toLeftOf="@+id/infoLayout"
@@ -253,14 +276,14 @@
 	<LinearLayout
 		android:id="@+id/paramsLayout"
 		android:orientation="horizontal"
-		android:layout_width="fill_parent"
+		android:layout_width="match_parent"
 		android:layout_height="@dimen/paramsLayoutHeight"
 		android:background="@drawable/blacktransparentlayertop"    
 		android:layout_gravity="top"		
 		android:layout_alignParentTop="true">
 		 	<com.almalence.ui.RotateImageView android:id="@+id/evButton"
 					android:background="@android:color/transparent"
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -268,7 +291,7 @@
 			   		android:onClick="onButtonClick"/>
 		 	<com.almalence.ui.RotateImageView android:id="@+id/sceneButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -276,7 +299,7 @@
 			   		android:onClick="onButtonClick"/>		 	
 			<com.almalence.ui.RotateImageView android:id="@+id/wbButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -284,7 +307,7 @@
 			   		android:onClick="onButtonClick"/>
 			<com.almalence.ui.RotateImageView android:id="@+id/focusButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -292,7 +315,7 @@
 			   		android:onClick="onButtonClick"/>
 			<com.almalence.ui.RotateImageView android:id="@+id/flashButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -300,7 +323,7 @@
 			   		android:onClick="onButtonClick"/>
 			<com.almalence.ui.RotateImageView android:id="@+id/isoButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -308,7 +331,7 @@
 			   		android:onClick="onButtonClick"/>
 			<com.almalence.ui.RotateImageView android:id="@+id/meteringButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -316,7 +339,7 @@
 			   		android:onClick="onButtonClick"/>			
 			<com.almalence.ui.RotateImageView android:id="@+id/camerachangeButton"
 					android:background="@android:color/transparent"					
-					android:layout_height="fill_parent"
+					android:layout_height="match_parent"
 					android:layout_width="0dip"
 					android:layout_weight="1"
 			   		android:layout_gravity="center"
@@ -327,7 +350,7 @@
 	<RelativeLayout android:id="@+id/qcLayout"
         		android:background="@drawable/blacktransparentlayerpulldownmenu"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
 	    		android:layout_below="@+id/paramsLayout"				
 				android:layout_gravity="top"
@@ -337,7 +360,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/qcGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3" 
 					    android:verticalSpacing="10dp"
@@ -359,44 +382,40 @@
    		android:visibility="gone"/>	
 
 	
-	<RelativeLayout android:id="@+id/storeLayout"
-        		android:background="@drawable/store_background"
-        		android:layout_width="fill_parent"
-        		android:layout_height="fill_parent"        		
-				android:visibility="gone">
-					<ImageView
-						android:id="@+id/storeHeader"
-						android:src="@drawable/store_header"
-						android:background="@android:color/transparent"
-						android:layout_height="@dimen/headerStoreImageSize"
-						android:layout_width="fill_parent"
-						android:layout_alignParentTop="true"
-						android:layout_centerHorizontal="true"
-				   		>
-					</ImageView>
-					<GridView
-					    android:id="@+id/storeGrid"
-					    android:layout_width="fill_parent" 
-					    android:layout_height="wrap_content"
-					    android:numColumns="3"
-					    android:horizontalSpacing="8dp"
-					    android:verticalSpacing="8dp"
-					    android:adjustViewBounds="true"
-					    android:stretchMode="columnWidth"
-					    android:layout_below="@+id/storeHeader"
-					    android:paddingTop="5dp"
-					    android:paddingLeft="8dp"
-	    				android:paddingRight="8dp"
-					/>
+	<RelativeLayout
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:id="@+id/viewPagerLayoutMain"
+        android:background="@drawable/store_background"
+        android:visibility="gone"
+		>
+		<ImageView
+			android:id="@+id/storeHeader"
+			android:src="@drawable/store_header"
+			android:background="@android:color/transparent"
+			android:layout_height="@dimen/headerStoreImageSize"
+			android:layout_width="match_parent"
+			android:layout_alignParentTop="true"
+			android:layout_centerHorizontal="true"
+	   		>
+		</ImageView>
+		<RelativeLayout
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:id="@+id/viewPagerLayout"
+	        android:background="@drawable/store_background"
+	        android:layout_below="@+id/storeHeader"
+			>
+	 	</RelativeLayout>
 	</RelativeLayout>
-	 
+	
 	<RelativeLayout
 		android:id="@+id/buttonsLayout"
-		android:layout_width="fill_parent"
+		android:layout_width="match_parent"
 		android:layout_height="wrap_content"	 
 		android:layout_marginTop="@dimen/buttonsLayoutMarginTop"
 		android:layout_above="@+id/mainButtons"
-		android:layout_below="@+id/paramsLayout">
+		android:layout_below="@+id/topPanel">
 			<LinearLayout
 		 	 	android:id="@+id/evLayout"
 		 	 	android:background="@drawable/ev_background"
@@ -473,7 +492,7 @@
 	    	<RelativeLayout android:id="@+id/scenemodeLayout"
         		android:background="@drawable/blacktransparentlayersettings"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"
         		android:layout_marginLeft="5dip"
         		android:layout_marginRight="5dip"
@@ -482,7 +501,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/scenemodeGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -495,7 +514,7 @@
 			<RelativeLayout android:id="@+id/wbLayout"
         		android:background="@drawable/blacktransparentlayersettings"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
         		android:layout_marginLeft="5dip"
         		android:layout_marginRight="5dip"
@@ -504,7 +523,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/wbGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -517,7 +536,7 @@
 			<RelativeLayout android:id="@+id/focusmodeLayout"
         		android:background="@drawable/blacktransparentlayersettings"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
         		android:layout_marginLeft="5dip"
         		android:layout_marginRight="5dip"
@@ -526,7 +545,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/focusmodeGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -539,7 +558,7 @@
 			<RelativeLayout android:id="@+id/flashmodeLayout"
         		android:background="@drawable/blacktransparentlayersettings"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
         		android:layout_marginLeft="5dip"
         		android:layout_marginRight="5dip"
@@ -548,7 +567,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/flashmodeGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -561,7 +580,7 @@
 			<RelativeLayout android:id="@+id/isoLayout"
         		android:background="@drawable/blacktransparentlayersettings"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
         		android:layout_marginLeft="5dip"
         		android:layout_marginRight="5dip"
@@ -570,7 +589,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/isoGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -583,7 +602,7 @@
 			<RelativeLayout android:id="@+id/meteringLayout"
         		android:background="@drawable/blacktransparentlayersettings"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
         		android:layout_marginLeft="5dip"
         		android:layout_marginRight="5dip"
@@ -592,7 +611,7 @@
 				android:visibility="gone">
 					<GridView  
 					    android:id="@+id/meteringmodeGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -608,7 +627,7 @@
  	    android:id="@+id/vfLayout"
  	    android:visibility="gone"
  	    android:orientation="vertical"
- 	    android:layout_width="fill_parent"
+ 	    android:layout_width="match_parent"
   		android:layout_height="wrap_content"
   		android:layout_gravity="bottom|right"
   		android:layout_above="@+id/mainButtons">					 		
@@ -618,7 +637,7 @@
 		<RelativeLayout android:id="@+id/modeLayout"
         		android:background="@drawable/blacktransparentlayerpulldownmenu"
         		android:orientation="vertical"
-        		android:layout_width="fill_parent"
+        		android:layout_width="match_parent"
         		android:layout_height="wrap_content"        		
 	    		android:layout_gravity="top"
 	    		android:padding="5dp"
@@ -627,7 +646,7 @@
 				android:visibility="gone">
 					<GridView
 					    android:id="@+id/modeGrid"
-					    android:layout_width="fill_parent" 
+					    android:layout_width="match_parent" 
 					    android:layout_height="wrap_content"
 					    android:numColumns="3"
 					    android:horizontalSpacing="10dp"
@@ -644,7 +663,7 @@
 <!-- -+-  -->
 	<com.almalence.ui.Panel
 	    xmlns:my="http://schemas.android.com/apk/res/com.almalence.opencam"
-		android:layout_width="fill_parent"
+		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
 		android:id="@+id/topPanel"
 		android:gravity="top"
@@ -657,7 +676,7 @@
 		>
 		<ImageButton
 			android:id="@id/panelHandle"
-			android:layout_width="fill_parent"
+			android:layout_width="match_parent"
 			android:layout_height="10dip"
 			android:background="@drawable/blacktransparentlayerpulldownmenu" 
 			android:layout_gravity="center"
@@ -669,7 +688,7 @@
 			android:id="@id/panelContent"
 			android:orientation="vertical"
 			android:background="@drawable/blacktransparentlayerpulldownmenu"
-			android:layout_width="fill_parent"
+			android:layout_width="match_parent"
 			android:layout_height="wrap_content">
 			<include
 			layout="@layout/gui_almalence_panel" />
@@ -679,7 +698,7 @@
 <!-- +++
 	<com.almalence.ui.Panel
 	    xmlns:my="http://schemas.android.com/apk/res/com.almalence.opencam_plus"
-		android:layout_width="fill_parent"
+		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
 		android:id="@+id/topPanel"
 		android:gravity="top"
@@ -692,7 +711,7 @@
 		>
 		<ImageButton
 			android:id="@id/panelHandle"
-			android:layout_width="fill_parent"
+			android:layout_width="match_parent"
 			android:layout_height="10dip"
 			android:background="@drawable/blacktransparentlayerpulldownmenu" 
 			android:layout_gravity="center"
@@ -704,7 +723,7 @@
 			android:id="@id/panelContent"
 			android:orientation="vertical"
 			android:background="@drawable/blacktransparentlayerpulldownmenu"
-			android:layout_width="fill_parent"
+			android:layout_width="match_parent"
 			android:layout_height="wrap_content">
 			<include
 			layout="@layout/gui_almalence_panel" />
@@ -715,8 +734,8 @@
 
 	<LinearLayout
 		android:id="@+id/hintLayout"
-		android:layout_width="fill_parent"
-		android:layout_height="fill_parent"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
 		android:orientation="vertical"    
 		android:background="@drawable/almalence_gui_hint_background"   
 		android:visibility="gone">
@@ -841,7 +860,7 @@
 			</ImageView>
 			
             <TextView
-				android:id="@+id/textDown"
+				android:id="@+id/textDownHintBottom"
 				android:text="@string/layout_hint_bottom"
 				android:textSize="18sp"
 				android:textColor="#00B6E8"
@@ -860,8 +879,8 @@
 	</LinearLayout>
 		
 	<RelativeLayout android:id="@+id/mode_help"
-			android:layout_width="fill_parent"
-			android:layout_height="fill_parent"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
 			android:layout_margin="20dip"
 			android:background="#FAFAFA"
 			android:visibility="gone"
@@ -882,7 +901,7 @@
 			
 		    <LinearLayout
 			android:id="@+id/helpImageLayout"
-			android:layout_width="fill_parent"
+			android:layout_width="match_parent"
 			android:layout_height="@dimen/helpImage"
 			android:layout_margin="5dip"
 			android:orientation="vertical"       
@@ -890,15 +909,15 @@
 			>
 	            <ImageView
 					android:id="@+id/helpImage"
-					android:layout_height="fill_parent"
-					android:layout_width="fill_parent"
+					android:layout_height="match_parent"
+					android:layout_width="match_parent"
 					>
 				</ImageView>
 			</LinearLayout>
 			
 		    <ScrollView 
 		    android:id="@+id/helpScroll"
-		    android:layout_width="fill_parent"
+		    android:layout_width="match_parent"
 		    android:layout_height="wrap_content"
 		    android:layout_below="@+id/helpImageLayout"
 		    android:layout_marginBottom="5dip"
@@ -911,7 +930,8 @@
 					android:background="@android:color/transparent"
 					android:layout_height="wrap_content"
 					android:layout_width="wrap_content"
-					android:layout_margin="5dip"
+					android:layout_marginLeft="10dip"
+					android:layout_marginRight="10dip"
 					>
 				</TextView>
 
@@ -930,15 +950,15 @@
 				>
 		            <LinearLayout
 					android:id="@+id/helpButtonsLayout"
-					android:layout_width="fill_parent"
+					android:layout_width="match_parent"
 					android:layout_height="wrap_content"
 					android:layout_margin="2dip"
 					android:orientation="horizontal"       
 					>
 			            <Button 
 			                android:id="@+id/buttonOk"
-			                android:layout_height="wrap_content"
-							android:layout_width="fill_parent"
+			                android:layout_height="match_parent"
+							android:layout_width="match_parent"
 			                android:textSize="17sp"
 			                android:text="@string/okText"
 			                android:textColor="#FFFFFF"
@@ -949,8 +969,8 @@
 			            
 			            <Button 
 			                android:id="@+id/buttonDontShow"
-			                android:layout_height="wrap_content"
-							android:layout_width="fill_parent"
+			                android:layout_height="match_parent"
+							android:layout_width="match_parent"
 			                android:textSize="17sp"
 			                android:text="@string/helpTextDontShow"
 			                android:textColor="#FFFFFF"

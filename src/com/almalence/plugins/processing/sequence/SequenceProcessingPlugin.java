@@ -14,35 +14,22 @@ The Original Code is collection of files collectively known as Open Camera.
 The Initial Developer of the Original Code is Almalence Inc.
 Portions created by Initial Developer are Copyright (C) 2013 
 by Almalence Inc. All Rights Reserved.
-*/
+ */
 
 package com.almalence.plugins.processing.sequence;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
 
-import android.content.ContentValues;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
 import android.graphics.BitmapFactory;
 import android.graphics.DashPathEffect;
-import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
-import android.graphics.Rect;
-import android.location.Location;
-import android.media.ExifInterface;
 import android.os.Handler;
 import android.os.Message;
-import android.preference.PreferenceManager;
-import android.provider.MediaStore.Images;
-import android.provider.MediaStore.Images.ImageColumns;
 import android.view.Display;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -55,464 +42,277 @@ import android.widget.RelativeLayout;
 import android.widget.RelativeLayout.LayoutParams;
 
 import com.almalence.SwapHeap;
-import com.almalence.asynctaskmanager.OnTaskCompleteListener;
-
 /* <!-- +++
-import com.almalence.opencam_plus.MainScreen;
-import com.almalence.opencam_plus.PluginManager;
-import com.almalence.opencam_plus.PluginProcessing;
-import com.almalence.opencam_plus.R;
-+++ --> */
+ import com.almalence.opencam_plus.MainScreen;
+ import com.almalence.opencam_plus.PluginManager;
+ import com.almalence.opencam_plus.R;
+ import com.almalence.opencam_plus.cameracontroller.CameraController;
+ +++ --> */
 // <!-- -+-
 import com.almalence.opencam.MainScreen;
 import com.almalence.opencam.PluginManager;
-import com.almalence.opencam.PluginProcessing;
 import com.almalence.opencam.R;
 import com.almalence.opencam.cameracontroller.CameraController;
 //-+- -->
 
 import com.almalence.util.ImageConversion;
-import com.almalence.util.MLocation;
 import com.almalence.util.Size;
-
-import com.almalence.plugins.export.standard.GPSTagsConverter;
 import com.almalence.plugins.processing.sequence.OrderControl.SequenceListener;
 
 /***
-Implements night processing
-***/
+ * Implements night processing
+ ***/
 
-public class SequenceProcessingPlugin extends PluginProcessing implements OnTaskCompleteListener, Handler.Callback, OnClickListener, SequenceListener
+public class SequenceProcessingPlugin implements Handler.Callback, OnClickListener, SequenceListener
 {
-	private long sessionID=0;
-	private static int mSensitivity = 15;
-	private static int mMinSize = 1000;
-	private static String mGhosting = "0";
-    
-	private static int mAngle = 0;
 
-	private static boolean SaveInputPreference;
-    
-    private AlmaCLRShot mAlmaCLRShot;
+	private View						postProcessingView;
 
-    public static int imgWidthOR;
-	public static int imgHeightOR;
-	private int mDisplayOrientation;
-	private boolean mCameraMirrored;
+	private long						sessionID		= 0;
+	private static int					mSensitivity	= 22;
+	private static int					mMinSize		= 1000;
+	private static String				mGhosting		= "0";
 
-	private int[] indexes;
-	
-	private OrderControl sequenceView;
-	private static ArrayList<Bitmap> thumbnails = new ArrayList<Bitmap>();
+	private static int					mAngle			= 0;
 
-	//indicates that no more user interaction needed
-	private boolean finishing = false;
-	
-	private static boolean isYUV = false;
-		
-	public SequenceProcessingPlugin()
+	private AlmaCLRShot					mAlmaCLRShot;
+
+	public static int					imgWidthOR;
+	public static int					imgHeightOR;
+	private int							mDisplayOrientation;
+	private boolean						mCameraMirrored;
+
+	private int[]						indexes;
+
+	private OrderControl				sequenceView;
+	private static ArrayList<Bitmap>	thumbnails		= new ArrayList<Bitmap>();
+
+	// indicates that no more user interaction needed
+	private boolean						finishing		= false;
+
+	public View getPostProcessingView()
 	{
-		super("com.almalence.plugins.sequenceprocessing",
-			  R.xml.preferences_processing_sequence,
-			  0,
-			  0,
-			  null);
+		return postProcessingView;
 	}
-		
-	@Override
+
 	public void onStart()
 	{
 		getPrefs();
 	}
-	
-	@Override
-	public void onStartProcessing(long SessionID) 
+
+	public void onStartProcessing(long SessionID)
 	{
 		finishing = false;
 		Message msg = new Message();
 		msg.what = PluginManager.MSG_PROCESSING_BLOCK_UI;
-		MainScreen.H.sendMessage(msg);	
-		
-		Message msg2 = new Message();
-		msg2.arg1 = PluginManager.MSG_CONTROL_LOCKED;
-		msg2.what = PluginManager.MSG_BROADCAST;
-		MainScreen.H.sendMessage(msg2);
-		
-		MainScreen.guiManager.lockControls = true;
-		
-		sessionID=SessionID;
+		MainScreen.getMessageHandler().sendMessage(msg);
 
-		PluginManager.getInstance().addToSharedMem("modeSaveName"+Long.toString(sessionID), PluginManager.getInstance().getActiveMode().modeSaveName);
-		
-		mDisplayOrientation = MainScreen.guiManager.getDisplayOrientation();
-		int orientation = MainScreen.guiManager.getLayoutOrientation();    	
-    	mLayoutOrientationCurrent = (orientation == 0 || orientation == 180)? orientation: (orientation + 180)%360;
-    	mCameraMirrored = CameraController.isFrontCamera();
-        
-        if(mDisplayOrientation == 0 || mDisplayOrientation == 180)
-        {
-        	imgWidthOR = MainScreen.getImageHeight();
-        	imgHeightOR = MainScreen.getImageWidth();
-        }
-        else
-        {
-        	imgWidthOR = MainScreen.getImageWidth();
-        	imgHeightOR = MainScreen.getImageHeight();
-        }
-        
-        int iSaveImageWidth = MainScreen.getSaveImageWidth();
-		int iSaveImageHeight = MainScreen.getSaveImageHeight();
-		
+		PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, 
+				PluginManager.MSG_CONTROL_LOCKED);
+
+		MainScreen.getGUIManager().lockControls = true;
+
+		sessionID = SessionID;
+
+		PluginManager.getInstance().addToSharedMem("modeSaveName" + sessionID,
+				PluginManager.getInstance().getActiveMode().modeSaveName);
+
+		mDisplayOrientation = Integer.valueOf(PluginManager.getInstance().getFromSharedMem("frameorientation1" + sessionID));
+		int orientation = MainScreen.getGUIManager().getLayoutOrientation();
+		mLayoutOrientationCurrent = (orientation == 0 || orientation == 180) ? orientation : (orientation + 180) % 360;
+		mCameraMirrored = CameraController.isFrontCamera();
+
+		CameraController.Size imageSize = CameraController.getCameraImageSize();
+		if (mDisplayOrientation == 0 || mDisplayOrientation == 180)
+		{
+			imgWidthOR = imageSize.getHeight();
+			imgHeightOR = imageSize.getWidth();
+		} else
+		{
+			imgWidthOR = imageSize.getWidth();
+			imgHeightOR = imageSize.getHeight();
+		}
+
 		mAlmaCLRShot = AlmaCLRShot.getInstance();
-		
-        getPrefs();
-         
-     	try {
-     		Size input = new Size(MainScreen.getImageWidth(), MainScreen.getImageHeight());
-            int imagesAmount = Integer.parseInt(PluginManager.getInstance().getFromSharedMem("amountofcapturedframes"+Long.toString(sessionID)));
-     		int minSize = 1000;
-     		if (mMinSize == 0) {
-     			minSize = 0;
-     		} else {
-     			minSize = input.getWidth() * input.getHeight() / mMinSize;
-     		}
-    		
-    		if (imagesAmount==0)
-    			imagesAmount=1;
-    		
-    		int iImageWidth = MainScreen.getImageWidth();
-    		int iImageHeight = MainScreen.getImageHeight();
-    		
-    		isYUV = Boolean.parseBoolean(PluginManager.getInstance().getFromSharedMem("isyuv"+Long.toString(sessionID)));
-    
-    		thumbnails.clear();
-    		for (int i=1; i<=imagesAmount; i++)
-    		{
-    			if(isYUV)
-    			{
-    				int yuv = Integer.parseInt(PluginManager.getInstance().getFromSharedMem("frame" + i+Long.toString(sessionID)));
-    				mYUVBufferList.add(i-1, yuv);
-    				
-    				thumbnails.add(Bitmap.createScaledBitmap(ImageConversion.decodeYUVfromBuffer(mYUVBufferList.get(i-1), iImageWidth, iImageHeight),
-	    	    			MainScreen.thiz.getResources().getDisplayMetrics().heightPixels / imagesAmount,
-	    	    			(int)(iImageHeight * (((float)MainScreen.thiz.getResources().getDisplayMetrics().heightPixels / imagesAmount) / iImageWidth)),
-	    	    			false));
-    			}
-    			else
-    			{
-	    			byte[] in = SwapHeap.CopyFromHeap(
-	    	        		Integer.parseInt(PluginManager.getInstance().getFromSharedMem("frame" + i+Long.toString(sessionID))),
-	    	        		Integer.parseInt(PluginManager.getInstance().getFromSharedMem("framelen" + i+Long.toString(sessionID)))
-	    	        		);
-	    			
-	    			mJpegBufferList.add(i-1, in);
-	    			
-	    			
-	    			BitmapFactory.Options opts = new BitmapFactory.Options();
-	    			thumbnails.add(Bitmap.createScaledBitmap(BitmapFactory.decodeByteArray(in, 0, in.length, opts),
-	    	    			MainScreen.thiz.getResources().getDisplayMetrics().heightPixels / imagesAmount,
-	    	    			(int)(opts.outHeight * (((float)MainScreen.thiz.getResources().getDisplayMetrics().heightPixels / imagesAmount) / opts.outWidth)),
-	    	    			false));
-    			}
-    		}
-    		
-    		if(!isYUV)
-    			getDisplaySize(mJpegBufferList.get(0));
-    		else
-    		{
-    			Display display= ((WindowManager) MainScreen.thiz.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();    			
-    			Point dis = new Point();
-    			display.getSize(dis);
-    			
-    			float imageRatio = (float)iImageWidth / (float)iImageHeight;
-    			float displayRatio = (float)dis.y / (float)dis.x;
-    			
-    			if (imageRatio > displayRatio) {
-    				mDisplayWidth = dis.y;
-    				mDisplayHeight = (int)((float)dis.y / (float)imageRatio);
-    			} else {
-    				mDisplayWidth = (int)((float)dis.x * (float)imageRatio);
-    				mDisplayHeight = dis.x;
-    			}
-    		}
-    		
-    		Size preview = new Size(mDisplayWidth, mDisplayHeight);
-    		
-    		if (SaveInputPreference)
-    		{
-    			try
-    	        {
-    	            File saveDir = PluginManager.getInstance().GetSaveDir(false);
 
-    	            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.mainContext);
-    	    		int saveOption = Integer.parseInt(prefs.getString("exportName", "3"));
-    	        	Calendar d = Calendar.getInstance();
-    	        	String fileFormat = String.format("%04d%02d%02d_%02d%02d%02d",
-    	            		d.get(Calendar.YEAR),
-    	            		d.get(Calendar.MONTH)+1,
-    	            		d.get(Calendar.DAY_OF_MONTH),
-    	            		d.get(Calendar.HOUR_OF_DAY),
-    	            		d.get(Calendar.MINUTE),
-    	            		d.get(Calendar.SECOND));
-    	        	switch (saveOption)
-    	        	{
-    	        	case 1://YEARMMDD_HHMMSS
-    	        		break;
-    	        		
-    	        	case 2://YEARMMDD_HHMMSS_MODE
-    	        		fileFormat += "_" + PluginManager.getInstance().getActiveMode().modeSaveName;
-    	        		break;
-    	        		
-    	        	case 3://IMG_YEARMMDD_HHMMSS
-    	        		fileFormat = "IMG_" + fileFormat;
-    	        		break;
-    	        		
-    	        	case 4://IMG_YEARMMDD_HHMMSS_MODE
-    	        		fileFormat = "IMG_" + fileFormat + "_" + PluginManager.getInstance().getActiveMode().modeSaveName;
-    	        		break;
-    	        	}
-    	        	
-    	        	ContentValues values=null;
-    	        	
-    	            for (int i = 0; i<imagesAmount; ++i)
-    	            {
-    	            	
-    	            	String index = String.format("_%02d", i);
-    		            File file = new File(saveDir, fileFormat+index+".jpg");
-    		            
-    		            FileOutputStream os = null;
-    		            try
-    			    	{
-    		            	os = new FileOutputStream(file);
-    			    	}
-    			    	catch (Exception e)
-    			        {
-    			    		//save always if not working saving to sdcard
-    			        	e.printStackTrace();
-    			        	saveDir = PluginManager.getInstance().GetSaveDir(true);
-    			        	file = new File(saveDir, fileFormat+index+".jpg");
-    			        	os = new FileOutputStream(file);
-    			        }	   
-    		                		            
-    		            String resultOrientation = PluginManager.getInstance().getFromSharedMem("frameorientation" + (i+1) + Long.toString(sessionID));
-    		            Boolean orientationLandscape = false;
-    		            if (resultOrientation == null)
-    			            orientationLandscape = true;
-    		            else
-    		            	orientationLandscape = Boolean.parseBoolean(resultOrientation);
-    		            
-    		            String resultMirrored = PluginManager.getInstance().getFromSharedMem("framemirrored" + (i+1) + Long.toString(sessionID));
-    		            Boolean cameraMirrored = false;
-    		            if (resultMirrored != null)
-    		            	cameraMirrored = Boolean.parseBoolean(resultMirrored);
-    		            
-    		            if (os != null)
-    		            {
-    		            	if(!isYUV)
-    		            	{
-	    		            	// ToDo: not enough memory error reporting
-	    			            os.write(mJpegBufferList.get(i));
-    		            	}
-    		            	else
-    		            	{
-    		            		com.almalence.YuvImage image = new com.almalence.YuvImage(mYUVBufferList.get(i), ImageFormat.NV21, iImageWidth, iImageHeight, null);
-    		            		//to avoid problems with SKIA
-    		            		int cropHeight = image.getHeight()-image.getHeight()%16;
-    					    	image.compressToJpeg(new Rect(0, 0, image.getWidth(), cropHeight), 100, os);
-    		            	}
-    			            os.close();
-    			        
-    			            ExifInterface ei = new ExifInterface(file.getAbsolutePath());
-    			            int exif_orientation = ExifInterface.ORIENTATION_NORMAL;
-    		            	switch(mDisplayOrientation)
-    		            	{
-    		            	default:
-    		            	case 0:
-    		            		exif_orientation = ExifInterface.ORIENTATION_NORMAL;//cameraMirrored ? ExifInterface.ORIENTATION_ROTATE_180 : ExifInterface.ORIENTATION_NORMAL;
-    		            		break;
-    		            	case 90:
-    		            		exif_orientation = cameraMirrored ? ExifInterface.ORIENTATION_ROTATE_270 : ExifInterface.ORIENTATION_ROTATE_90;
-    		            		break;
-    		            	case 180:
-    		            		exif_orientation = ExifInterface.ORIENTATION_ROTATE_180;//cameraMirrored ? ExifInterface.ORIENTATION_NORMAL : ExifInterface.ORIENTATION_ROTATE_180;
-    		            		break;
-    		            	case 270:
-    		            		exif_orientation = cameraMirrored ? ExifInterface.ORIENTATION_ROTATE_90 : ExifInterface.ORIENTATION_ROTATE_270;
-    		            		break;
-    		            	}
-    		            	ei.setAttribute(ExifInterface.TAG_ORIENTATION, "" + exif_orientation);
-    			            ei.saveAttributes();
-    		            }
-    		            
-    		            values = new ContentValues(9);
-    	                values.put(ImageColumns.TITLE, file.getName().substring(0, file.getName().lastIndexOf(".")));
-    	                values.put(ImageColumns.DISPLAY_NAME, file.getName());
-    	                values.put(ImageColumns.DATE_TAKEN, System.currentTimeMillis());
-    	                values.put(ImageColumns.MIME_TYPE, "image/jpeg");
-    	                values.put(ImageColumns.ORIENTATION, (!orientationLandscape && !cameraMirrored) ? 90 : (!orientationLandscape && cameraMirrored) ? -90 : 0);                
-    	                values.put(ImageColumns.DATA, file.getAbsolutePath());
-    	                
-    	                if (prefs.getBoolean("useGeoTaggingPrefExport", false))
-    		            {
-    		            	Location l = MLocation.getLocation(MainScreen.mainContext);
-    			            
-    			            if (l != null)
-    			            {	     
-    			            	ExifInterface ei = new ExifInterface(file.getAbsolutePath());
-    				            ei.setAttribute(ExifInterface.TAG_GPS_LATITUDE, GPSTagsConverter.convert(l.getLatitude()));
-    				            ei.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, GPSTagsConverter.latitudeRef(l.getLatitude()));
-    				            ei.setAttribute(ExifInterface.TAG_GPS_LONGITUDE, GPSTagsConverter.convert(l.getLongitude()));
-    				            ei.setAttribute(ExifInterface.TAG_GPS_LONGITUDE_REF, GPSTagsConverter.longitudeRef(l.getLongitude()));
+		getPrefs();
 
-    			            	ei.saveAttributes();
-    			            	
-    				            values.put(ImageColumns.LATITUDE, l.getLatitude());
-    				            values.put(ImageColumns.LONGITUDE, l.getLongitude());
-    		            	}
-    		            }
-    	                
-    	                MainScreen.thiz.getContentResolver().insert(Images.Media.EXTERNAL_CONTENT_URI, values);
-    	            }
-    	        }
-    			catch(IOException e) {
-    	            e.printStackTrace();
-    	            MainScreen.H.sendEmptyMessage(PluginManager.MSG_EXPORT_FINISHED_IOEXCEPTION);
-    	            return;
-    	        }
-    	        catch (Exception e)
-    	        {
-    	        	e.printStackTrace();
-    	        }
-    		}
-    		
-    		
-    		PluginManager.getInstance().addToSharedMem("amountofresultframes"+Long.toString(sessionID), String.valueOf(imagesAmount));
-    		
-			PluginManager.getInstance().addToSharedMem("saveImageWidth"+String.valueOf(sessionID), String.valueOf(iSaveImageWidth));
-	    	PluginManager.getInstance().addToSharedMem("saveImageHeight"+String.valueOf(sessionID), String.valueOf(iSaveImageHeight));
-     		
-    		this.indexes = new int[imagesAmount];
-            for (int i = 0; i < imagesAmount; i++)
-            {
-            	this.indexes[i] = i;
-            }
-            
-     		//frames!!! should be taken from heap
-            if(!isYUV)
-            	mAlmaCLRShot.addJPEGInputFrame(mJpegBufferList, input);
-            else
-            	mAlmaCLRShot.addYUVInputFrame(mYUVBufferList, input);
+		try
+		{
+			Size input = new Size(imageSize.getWidth(), imageSize.getHeight());
+			int imagesAmount = Integer.parseInt(PluginManager.getInstance().getFromSharedMem(
+					"amountofcapturedframes" + sessionID));
+			int minSize = 1000;
+			if (mMinSize == 0)
+			{
+				minSize = 0;
+			} else
+			{
+				minSize = input.getWidth() * input.getHeight() / mMinSize;
+			}
 
-     		mAlmaCLRShot.initialize(preview,
-     				mAngle,
- 					/*
- 					 * sensitivity for objection detection
- 					 * 
- 					 */
- 					mSensitivity - 15,
- 					/*
- 					 *  Minimum size of object to be able to detect
- 					 *  -15 ~ 15
- 					 *  max -> easy detection dull detection
- 					 *  min -> 
- 					 */
- 					minSize,
- 					/*
- 					 * ghosting parameter
-    					 * 0 : normal operation
- 					 * 1 : detect ghosted objects but not remove them
- 					 * 2 : detect and remove all object
- 					 */
- 					Integer.parseInt(mGhosting),
- 					indexes);
-     		
-     		//compressed_frame.clear();
- 		} 
-     	catch (Exception e) 
- 		{
- 			e.printStackTrace();
- 		}
-     		}
-/************************************************
- * 		POST PROCESSING
- ************************************************/
-	@Override
+			if (imagesAmount == 0)
+				imagesAmount = 1;
+
+			int iImageWidth = imageSize.getWidth();
+			int iImageHeight = imageSize.getHeight();
+
+			thumbnails.clear();
+			int heightPixels = MainScreen.getAppResources().getDisplayMetrics().heightPixels;
+			for (int i = 1; i <= imagesAmount; i++)
+			{
+				thumbnails
+						.add(Bitmap.createScaledBitmap(ImageConversion.decodeYUVfromBuffer(
+								mYUVBufferList.get(i - 1), iImageWidth, iImageHeight), heightPixels
+								/ imagesAmount, (int) (iImageHeight * (((float)heightPixels / imagesAmount) / iImageWidth)),
+								false));
+			}
+
+			Display display = ((WindowManager) MainScreen.getInstance().getSystemService(Context.WINDOW_SERVICE))
+					.getDefaultDisplay();
+			Point dis = new Point();
+			display.getSize(dis);
+
+			float imageRatio = (float) iImageWidth / (float) iImageHeight;
+			float displayRatio = (float) dis.y / (float) dis.x;
+
+			if (imageRatio > displayRatio)
+			{
+				mDisplayWidth = dis.y;
+				mDisplayHeight = (int) ((float) dis.y / (float) imageRatio);
+			} else
+			{
+				mDisplayWidth = (int) ((float) dis.x * (float) imageRatio);
+				mDisplayHeight = dis.x;
+			}
+
+			Size preview = new Size(mDisplayWidth, mDisplayHeight);
+
+			PluginManager.getInstance()
+					.addToSharedMem("amountofresultframes" + sessionID, String.valueOf(imagesAmount));
+
+			PluginManager.getInstance().addToSharedMem("saveImageWidth" + sessionID, String.valueOf(imgWidthOR));
+			PluginManager.getInstance().addToSharedMem("saveImageHeight" + sessionID, String.valueOf(imgHeightOR));
+
+			this.indexes = new int[imagesAmount];
+			for (int i = 0; i < imagesAmount; i++)
+			{
+				this.indexes[i] = i;
+			}
+
+			// frames!!! should be taken from heap
+			mAlmaCLRShot.addYUVInputFrame(mYUVBufferList, input);
+
+			mAlmaCLRShot.initialize(preview, mAngle,
+			/*
+			 * sensitivity for objection detection
+			 */
+			mSensitivity - 15,
+			/*
+			 * Minimum size of object to be able to detect -15 ~ 15 max -> easy
+			 * detection dull detection min ->
+			 */
+			minSize,
+			/*
+			 * ghosting parameter 0 : normal operation 1 : detect ghosted
+			 * objects but not remove them 2 : detect and remove all object
+			 */
+			Integer.parseInt(mGhosting), indexes);
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+	}
+
+	/************************************************
+	 * POST PROCESSING
+	 ************************************************/
 	public boolean isPostProcessingNeeded()
 	{
 		return true;
 	}
-	
-	private ImageView mImgView;
-	private Button mSaveButton;
-	private static final int MSG_REDRAW = 1;
-	private static final int MSG_LEAVING = 3;
-	private static final int MSG_END_OF_LOADING = 4;
-	private final Handler mHandler = new Handler(this);
-	private int mLayoutOrientationCurrent;
-	private int mDisplayOrientationCurrent;
-	private Bitmap PreviewBmp = null;
-	public static int mDisplayWidth;
-	public static int mDisplayHeight;
-	public static ArrayList<byte[]> mJpegBufferList = new ArrayList<byte []>();
-	public static ArrayList<Integer> mYUVBufferList = new ArrayList<Integer>();
-	public static ArrayList<Bitmap> mInputBitmapList = new ArrayList<Bitmap>();
-	Paint paint=null;
-	
-	private boolean postProcessingRun = false;
-	
-	@Override
+
+	private ImageView					mImgView;
+	private Button						mSaveButton;
+	private static final int			MSG_REDRAW			= 1;
+	private static final int			MSG_LEAVING			= 3;
+	private static final int			MSG_END_OF_LOADING	= 4;
+	private final Handler				mHandler			= new Handler(this);
+	private int							mLayoutOrientationCurrent;
+	private int							mDisplayOrientationCurrent;
+	private Bitmap						PreviewBmp			= null;
+	public static int					mDisplayWidth;
+	public static int					mDisplayHeight;
+
+	private static ArrayList<Integer>	mYUVBufferList;
+
+	public static void setmYUVBufferList(ArrayList<Integer> mYUVBufferList)
+	{
+		SequenceProcessingPlugin.mYUVBufferList = mYUVBufferList;
+	}
+
+	public static ArrayList<Bitmap>	mInputBitmapList	= new ArrayList<Bitmap>();
+	Paint							paint				= null;
+
+	private boolean					postProcessingRun	= false;
+
 	public void onStartPostProcessing()
-	{	
-		LayoutInflater inflator = MainScreen.thiz.getLayoutInflater();
+	{
+		LayoutInflater inflator = MainScreen.getInstance().getLayoutInflater();
 		postProcessingView = inflator.inflate(R.layout.plugin_processing_sequence_postprocessing, null, false);
-		
-		mImgView = ((ImageView)postProcessingView.findViewById(R.id.sequenceImageHolder));
-		
-        if (PreviewBmp != null) {
-        	PreviewBmp.recycle();
-        }
+
+		mImgView = ((ImageView) postProcessingView.findViewById(R.id.sequenceImageHolder));
+
+		if (PreviewBmp != null)
+		{
+			PreviewBmp.recycle();
+		}
 
 		paint = new Paint();
 		paint.setColor(0xFF00AAEA);
 		paint.setStrokeWidth(5);
-		paint.setPathEffect(new DashPathEffect(new float[] {5,5},0));
+		paint.setPathEffect(new DashPathEffect(new float[] { 5, 5 }, 0));
 
-    	PreviewBmp = mAlmaCLRShot.getPreviewBitmap();
+		PreviewBmp = mAlmaCLRShot.getPreviewBitmap();
 
-        if (PreviewBmp != null)  
-        {
-        	Matrix matrix = new Matrix();
-        	matrix.postRotate(90);
-        	Bitmap rotated = Bitmap.createBitmap(PreviewBmp, 0, 0, PreviewBmp.getWidth(), PreviewBmp.getHeight(),
-        	        matrix, true);
-        	mImgView.setImageBitmap(rotated);
-        	mImgView.setRotation(CameraController.isFrontCamera()? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 0 : 180) : 0);
-        }		
+		if (PreviewBmp != null)
+		{
+			Matrix matrix = new Matrix();
+			matrix.postRotate(90);
+			Bitmap rotated = Bitmap.createBitmap(PreviewBmp, 0, 0, PreviewBmp.getWidth(), PreviewBmp.getHeight(),
+					matrix, true);
+			mImgView.setImageBitmap(rotated);
+			mImgView.setRotation(CameraController.isFrontCamera() ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 0
+					: 180)
+					: 0);
+		}
 
-        sequenceView = ((OrderControl)postProcessingView.findViewById(R.id.seqView));
-    	final Bitmap[] thumbnailsArray = new Bitmap[thumbnails.size()];
-    	for (int i = 0; i < thumbnailsArray.length; i++)
-    	{
-    		Bitmap bmp = thumbnails.get(i);
-    		Matrix matrix = new Matrix();
-        	matrix.postRotate(CameraController.isFrontCamera()? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 270 : 90) : 90);
-        	Bitmap rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(),
-        	        matrix, true);
-    		thumbnailsArray[i] = rotated;
-    	}
-    	sequenceView.setContent(thumbnailsArray, this);
-    	LayoutParams lp = (LayoutParams)sequenceView.getLayoutParams();
-    	lp.height = thumbnailsArray[0].getHeight();
-    	sequenceView.setLayoutParams(lp);
-    	
-    	sequenceView.setRotation(CameraController.isFrontCamera()?180:0);
-    	
-	    mHandler.sendEmptyMessage(MSG_END_OF_LOADING);
+		sequenceView = ((OrderControl) postProcessingView.findViewById(R.id.seqView));
+		final Bitmap[] thumbnailsArray = new Bitmap[thumbnails.size()];
+		for (int i = 0; i < thumbnailsArray.length; i++)
+		{
+			Bitmap bmp = thumbnails.get(i);
+			Matrix matrix = new Matrix();
+			matrix.postRotate(CameraController.isFrontCamera() ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 270
+					: 90)
+					: 90);
+			Bitmap rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
+			thumbnailsArray[i] = rotated;
+		}
+		sequenceView.setContent(thumbnailsArray, this);
+		LayoutParams lp = (LayoutParams) sequenceView.getLayoutParams();
+		lp.height = thumbnailsArray[0].getHeight();
+		sequenceView.setLayoutParams(lp);
+
+		sequenceView.setRotation(CameraController.isFrontCamera() ? 180 : 0);
+
+		mHandler.sendEmptyMessage(MSG_END_OF_LOADING);
 	}
-	
-	public void getDisplaySize(byte[] data) 
+
+	public void getDisplaySize(byte[] data)
 	{
-		Display display= ((WindowManager) MainScreen.thiz.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
+		Display display = ((WindowManager) MainScreen.getInstance().getSystemService(Context.WINDOW_SERVICE))
+				.getDefaultDisplay();
 		BitmapFactory.Options options = new BitmapFactory.Options();
 		options.inPreferredConfig = Config.ARGB_8888;
 		options.inJustDecodeBounds = true;
@@ -520,206 +320,204 @@ public class SequenceProcessingPlugin extends PluginProcessing implements OnTask
 		Point dis = new Point();
 		display.getSize(dis);
 
-		float imageRatio = (float)options.outWidth / (float)options.outHeight;
-		float displayRatio = (float)dis.y / (float)dis.x;
-		
-		if (imageRatio > displayRatio) {
+		float imageRatio = (float) options.outWidth / (float) options.outHeight;
+		float displayRatio = (float) dis.y / (float) dis.x;
+
+		if (imageRatio > displayRatio)
+		{
 			mDisplayWidth = dis.y;
-			mDisplayHeight = (int)((float)dis.y / (float)imageRatio);
-		} else {
-			mDisplayWidth = (int)((float)dis.x * (float)imageRatio);
+			mDisplayHeight = (int) ((float) dis.y / (float) imageRatio);
+		} else
+		{
+			mDisplayWidth = (int) ((float) dis.x * (float) imageRatio);
 			mDisplayHeight = dis.x;
 		}
 		return;
 	}
-	
-	
-    public void setupSaveButton() {
-    	// put save button on screen
-        mSaveButton = new Button(MainScreen.thiz);
-        mSaveButton .setBackgroundResource(R.drawable.button_save_background);
-        mSaveButton .setOnClickListener(this);
-        LayoutParams saveLayoutParams = new LayoutParams(
-        		(int) (MainScreen.mainContext.getResources().getDimension(R.dimen.postprocessing_savebutton_size)), 
-        		(int) (MainScreen.mainContext.getResources().getDimension(R.dimen.postprocessing_savebutton_size)));
-        saveLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        saveLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-        saveLayoutParams.setMargins(
-        		(int)(MainScreen.thiz.getResources().getDisplayMetrics().density * 8), 
-        		(int)(MainScreen.thiz.getResources().getDisplayMetrics().density * 8), 
-        		0, 
-        		0);
-		((RelativeLayout)postProcessingView.findViewById(R.id.sequenceLayout)).addView(mSaveButton, saveLayoutParams);
-		mSaveButton.setRotation(mLayoutOrientationCurrent);
-    }
-    
-    public void onOrientationChanged(int orientation)
-    {	    	
-    	if(orientation != mDisplayOrientationCurrent)
-    	{
-    		mDisplayOrientationCurrent = orientation;
-    		mLayoutOrientationCurrent = (orientation == 0 || orientation == 180) ? orientation + 90 : orientation - 90;
-    		if(postProcessingRun)
-    			mSaveButton.setRotation(mLayoutOrientationCurrent);
-    	}
-    }
-    
-    @Override
-	public void onClick(View v) 
+
+	public void setupSaveButton()
 	{
-    	if (v == mSaveButton)
-    	{
-    		if (finishing == true)
-				return;
-    		finishing = true;
-    		savePicture(MainScreen.mainContext);
-    		
-    		mHandler.sendEmptyMessage(MSG_LEAVING);
-    	}
+		// put save button on screen
+		mSaveButton = new Button(MainScreen.getInstance());
+		mSaveButton.setBackgroundResource(R.drawable.button_save_background);
+		mSaveButton.setOnClickListener(this);
+		LayoutParams saveLayoutParams = new LayoutParams(
+				(int) (MainScreen.getMainContext().getResources().getDimension(R.dimen.postprocessing_savebutton_size)),
+				(int) (MainScreen.getMainContext().getResources().getDimension(R.dimen.postprocessing_savebutton_size)));
+		saveLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+		saveLayoutParams.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+		float density = MainScreen.getAppResources().getDisplayMetrics().density;
+		saveLayoutParams.setMargins((int) (density * 8), (int) (density * 8), 0, 0);
+		((RelativeLayout) postProcessingView.findViewById(R.id.sequenceLayout)).addView(mSaveButton, saveLayoutParams);
+		mSaveButton.setRotation(mLayoutOrientationCurrent);
 	}
-    
-    public void savePicture(Context context)
-    {
-    	byte[] result = mAlmaCLRShot.processingSaveData();
+
+	public void onOrientationChanged(int orientation)
+	{
+		if (orientation != mDisplayOrientationCurrent)
+		{
+			mDisplayOrientationCurrent = orientation;
+			mLayoutOrientationCurrent = (orientation == 0 || orientation == 180) ? orientation + 90 : orientation - 90;
+			if (postProcessingRun)
+				mSaveButton.setRotation(mLayoutOrientationCurrent);
+		}
+	}
+
+	@Override
+	public void onClick(View v)
+	{
+		if (v == mSaveButton)
+		{
+			if (finishing)
+				return;
+			finishing = true;
+			savePicture(MainScreen.getMainContext());
+
+			mHandler.sendEmptyMessage(MSG_LEAVING);
+		}
+	}
+
+	public void savePicture(Context context)
+	{
+		byte[] result = mAlmaCLRShot.processingSaveData();
 		int frame_len = result.length;
 		int frame = SwapHeap.SwapToHeap(result);
 
-		PluginManager.getInstance().addToSharedMem("resultframeformat1"+Long.toString(sessionID), "jpeg");
-		PluginManager.getInstance().addToSharedMem("resultframe1"+Long.toString(sessionID), String.valueOf(frame));
-    	PluginManager.getInstance().addToSharedMem("resultframelen1"+Long.toString(sessionID), String.valueOf(frame_len));
-    	
-    	PluginManager.getInstance().addToSharedMem("resultframeorientation1" + String.valueOf(sessionID), String.valueOf(mDisplayOrientation));
-    	PluginManager.getInstance().addToSharedMem("resultframemirrored1" + String.valueOf(sessionID), String.valueOf(mCameraMirrored));
-		
-		
-		PluginManager.getInstance().addToSharedMem("amountofresultframes"+Long.toString(sessionID), String.valueOf(1));
-		
+		PluginManager.getInstance().addToSharedMem("resultframeformat1" + sessionID, "jpeg");
+		PluginManager.getInstance().addToSharedMem("resultframe1" + sessionID, String.valueOf(frame));
+		PluginManager.getInstance().addToSharedMem("resultframelen1" + sessionID, String.valueOf(frame_len));
+
+		PluginManager.getInstance().addToSharedMem("resultframeorientation1" + sessionID,
+				String.valueOf(mDisplayOrientation));
+		PluginManager.getInstance().addToSharedMem("resultframemirrored1" + sessionID, String.valueOf(mCameraMirrored));
+
+		PluginManager.getInstance().addToSharedMem("amountofresultframes" + sessionID, String.valueOf(1));
+
 		PluginManager.getInstance().addToSharedMem("sessionID", String.valueOf(sessionID));
 		mAlmaCLRShot.release();
-    }
-    
-    @Override
+	}
+
+	@Override
 	public boolean handleMessage(Message msg)
 	{
-    	switch (msg.what)
-    	{
-    	case MSG_END_OF_LOADING:
+		switch (msg.what)
+		{
+		case MSG_END_OF_LOADING:
 			setupSaveButton();
 			postProcessingRun = true;
-    		break;
-    	case MSG_LEAVING:
-    		MainScreen.H.sendEmptyMessage(PluginManager.MSG_POSTPROCESSING_FINISHED);
-    		mJpegBufferList.clear();
-    		
-    		Message msg2 = new Message();
-    		msg2.arg1 = PluginManager.MSG_CONTROL_UNLOCKED;
-    		msg2.what = PluginManager.MSG_BROADCAST;
-    		MainScreen.H.sendMessage(msg2);
-    		
-    		MainScreen.guiManager.lockControls = false;   		
+			break;
+		case MSG_LEAVING:
+			MainScreen.getMessageHandler().sendEmptyMessage(PluginManager.MSG_POSTPROCESSING_FINISHED);
 
-    		postProcessingRun = false;
-        	return false;
-        	
-    	case MSG_REDRAW:
-            if (PreviewBmp != null)
-            	PreviewBmp.recycle();
-            if (finishing == true)
+			PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, 
+					PluginManager.MSG_CONTROL_UNLOCKED);
+
+			MainScreen.getGUIManager().lockControls = false;
+
+			postProcessingRun = false;
+			return false;
+
+		case MSG_REDRAW:
+			if (PreviewBmp != null)
+				PreviewBmp.recycle();
+			if (finishing)
 				return true;
-    		PreviewBmp = mAlmaCLRShot.getPreviewBitmap();
-            if (PreviewBmp != null) 
-        	{
-            	Matrix matrix = new Matrix();
-            	matrix.postRotate(90);
-            	Bitmap rotated = Bitmap.createBitmap(PreviewBmp, 0, 0, PreviewBmp.getWidth(), PreviewBmp.getHeight(),
-            	        matrix, true);
-            	mImgView.setImageBitmap(rotated);
-            	mImgView.setRotation(CameraController.isFrontCamera()? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 0 : 180) : 0);
-        	}
-            
-            sequenceView.setEnabled(true);
-            break;
-    	}    	
-    	return true;
+			PreviewBmp = mAlmaCLRShot.getPreviewBitmap();
+			if (PreviewBmp != null)
+			{
+				Matrix matrix = new Matrix();
+				matrix.postRotate(90);
+				Bitmap rotated = Bitmap.createBitmap(PreviewBmp, 0, 0, PreviewBmp.getWidth(), PreviewBmp.getHeight(),
+						matrix, true);
+				mImgView.setImageBitmap(rotated);
+				mImgView.setRotation(CameraController.isFrontCamera() ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 0
+						: 180)
+						: 0);
+			}
+
+			sequenceView.setEnabled(true);
+			break;
+		default:
+			break;
+		}
+		return true;
 	}
-	
-	
-	@Override
+
 	public boolean onKeyDown(int keyCode, KeyEvent event)
 	{
-		if (keyCode == KeyEvent.KEYCODE_BACK && MainScreen.thiz.findViewById(R.id.postprocessingLayout).getVisibility() == View.VISIBLE)
+		if (keyCode == KeyEvent.KEYCODE_BACK
+				&& MainScreen.getInstance().findViewById(R.id.postprocessingLayout).getVisibility() == View.VISIBLE)
 		{
-			if (finishing == true)
+			if (finishing)
 				return true;
 			finishing = true;
 			mHandler.sendEmptyMessage(MSG_LEAVING);
 			mAlmaCLRShot.release();
 			return true;
 		}
-		
-		return super.onKeyDown(keyCode, event);
-	}
-		
 
-	@Override
+		return false;
+	}
+
 	public void onSequenceChanged(final int[] idx)
 	{
 		sequenceView.setEnabled(false);
 
-		Size input = new Size(MainScreen.getImageWidth(), MainScreen.getImageHeight());
- 		int minSize = 1000;
- 		if (mMinSize == 0) {
- 			minSize = 0;
- 		} else {
- 			minSize = input.getWidth() * input.getHeight() / mMinSize;
- 		}
- 		
+		CameraController.Size imageSize = CameraController.getCameraImageSize();
+		Size input = new Size(imageSize.getWidth(), imageSize.getHeight());
+		int minSize = 1000;
+		if (mMinSize == 0)
+		{
+			minSize = 0;
+		} else
+		{
+			minSize = input.getWidth() * input.getHeight() / mMinSize;
+		}
+
 		Size preview = new Size(mDisplayWidth, mDisplayHeight);
-		try {
-			mAlmaCLRShot.initialize(preview,
-					mAngle,
-						/*
-						 * sensitivity for objection detection
-						 * 
-						 */
-						mSensitivity - 15,
-						/*
-						 *  Minimum size of object to be able to detect
-						 *  -15 ~ 15
-						 *  max -> easy detection dull detection
-						 *  min -> 
-						 */
-						minSize,
-						/*
-						 * ghosting parameter
-						 * 0 : normal operation
-						 * 1 : detect ghosted objects but not remove them
-						 * 2 : detect and remove all object
-						 */
-						Integer.parseInt(mGhosting),
-						idx);
-		} catch (NumberFormatException e) {
-			// TODO Auto-generated catch block
+		try
+		{
+			mAlmaCLRShot.initialize(preview, mAngle,
+			/*
+			 * sensitivity for objection detection
+			 */
+			mSensitivity - 15,
+			/*
+			 * Minimum size of object to be able to detect -15 ~ 15 max -> easy
+			 * detection dull detection min ->
+			 */
+			minSize,
+			/*
+			 * ghosting parameter 0 : normal operation 1 : detect ghosted
+			 * objects but not remove them 2 : detect and remove all object
+			 */
+			Integer.parseInt(mGhosting), idx);
+		} catch (NumberFormatException e)
+		{
 			e.printStackTrace();
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
+		} catch (Exception e)
+		{
 			e.printStackTrace();
 		}
-		
+
 		mHandler.sendEmptyMessage(MSG_REDRAW);
 	}
-	
-	private void getPrefs()
-    {
-		// Get the xml/preferences.xml preferences
-		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.thiz.getBaseContext());
-        mSensitivity = prefs.getInt("Sensitivity", 19);
-        mMinSize = prefs.getInt("MinSize", 1000);
-        mGhosting = prefs.getString("Ghosting", "2");
-        SaveInputPreference = prefs.getBoolean(MainScreen.thiz.getResources().getString(R.string.saveInputPrefSequence), false);
-    }
 
-/************************************************
- * 		POST PROCESSING END
- ************************************************/
+	private void getPrefs()
+	{
+		/*
+		 Code commented out because there are no correspondent controls exposed to the user
+		 ToDo: either delete (more likely), or add these controls as advanced
+		 
+		// Get the xml/preferences.xml preferences
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getInstance()
+				.getBaseContext());
+		mSensitivity = prefs.getInt("Sensitivity", 22); // 19);
+		mMinSize = prefs.getInt("MinSize", 1000);
+		mGhosting = prefs.getString("Ghosting", "0");
+		*/
+	}
+	/************************************************
+	 * POST PROCESSING END
+	 ************************************************/
 }

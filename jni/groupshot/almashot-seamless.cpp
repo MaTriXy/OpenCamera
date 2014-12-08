@@ -268,7 +268,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_plugins_processing_groupsho
 				if(rotationDegree == 90 || rotationDegree == 270)
 					nRotate = 1; //used to support 4-side rotation
 
-				// ToDo: not sure if it should be 'cameraMirrored, 0,' or '0, cameraMirrored,'
+				// not sure if it should be 'cameraMirrored, 0,' or '0, cameraMirrored,'
 				TransformNV21(yuv[i], inputFrame[i], sx, sy, NULL, cameraMirrored, flipUD, nRotate);
 //				free(dst);
 			}
@@ -398,7 +398,7 @@ extern "C" JNIEXPORT jintArray JNICALL Java_com_almalence_plugins_processing_gro
 
 	NV21_to_RGB_scaled((Uint8 *)inptr, srcW, srcH, left, top, right - left, bottom - top, dstW, dstH, 4, (Uint8 *)pixels);
 
-	env->ReleaseIntArrayElements(jpixels, (jint*)pixels, JNI_ABORT);
+	env->ReleaseIntArrayElements(jpixels, (jint*)pixels, 0);
 
 	LOGD("NV21toARGB - end");
 
@@ -438,7 +438,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_plugins_processing_groupsho
 	return ret;
 }
 
-extern "C" JNIEXPORT jbyte* JNICALL Java_com_almalence_plugins_processing_groupshot_AlmaShotSeamless_Preview
+extern "C" JNIEXPORT jintArray JNICALL Java_com_almalence_plugins_processing_groupshot_AlmaShotSeamless_Preview
 (
 	JNIEnv* env,
 	jobject thiz,
@@ -472,21 +472,21 @@ extern "C" JNIEXPORT jbyte* JNICALL Java_com_almalence_plugins_processing_groups
 
 	env->ReleaseByteArrayElements(jlayout, (jbyte*)layout, JNI_ABORT);
 
-	jbyteArray jpixels = NULL;
-	Uint8 * pixels;
+	jintArray jpixels = NULL;
+	Uint32 * pixels;
 
-	jpixels = env->NewByteArray(outWidth * outHeight * 4);
+	jpixels = env->NewIntArray(outWidth * outHeight * 4);
 	LOGD("alloc %d byte argb memory", outWidth * outHeight * 4);
-	pixels = (Uint8 *)env->GetByteArrayElements(jpixels, NULL);
+	pixels = (Uint32 *)env->GetIntArrayElements(jpixels, NULL);
 
 	NV21_to_RGB_scaled(outBuffer, inWidth, inHeight, 0, 0, inWidth, inHeight, outWidth, outHeight, 4, (Uint8 *)pixels);
 
 	free(outBuffer);
 
-	env->ReleaseByteArrayElements(jpixels, (jbyte*)pixels, JNI_ABORT);
+	env->ReleaseIntArrayElements(jpixels, (jint*)pixels, 0);
 
 	LOGD("Preview - end");
-	return (jbyte *)jpixels;
+	return jpixels;
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_com_almalence_plugins_processing_groupshot_AlmaShotSeamless_RealView
@@ -499,12 +499,12 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_plugins_processing_groupsho
 	jbyteArray jlayout
 )
 {
-	LOGD("RealView - start");
+	LOGE("RealView - start");
 
 	Uint8 *layout;
 	int *crop;
 
-	LOGD("alloc %d byte yvu memory", width * height * 3 / 2);
+	LOGE("alloc %d byte yvu memory", width * height * 3 / 2);
 
 	Uint8 *outBuffer = (Uint8 *)malloc(width * height * 3 / 2);
 
@@ -519,14 +519,14 @@ extern "C" JNIEXPORT jint JNICALL Java_com_almalence_plugins_processing_groupsho
 			0,					// full processing, not a quick method
 			&crop[0], &crop[1], &crop[2], &crop[3]) == ALMA_ALL_OK)
 	{
-		LOGD("RealView - ok");
+		LOGE("RealView - ok");
 	}
 	else
 	{
-		LOGD("RealView - error");
+		LOGE("RealView - error");
 	}
 
-	env->ReleaseIntArrayElements(jcrop, (jint*)crop, JNI_ABORT);
+	env->ReleaseIntArrayElements(jcrop, (jint*)crop, 0);
 	env->ReleaseByteArrayElements(jlayout, (jbyte*)layout, JNI_ABORT);
 
 	LOGD("RealView - end");

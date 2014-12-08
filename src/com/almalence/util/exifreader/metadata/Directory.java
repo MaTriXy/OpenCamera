@@ -40,7 +40,6 @@ import java.util.*;
  */
 public abstract class Directory
 {
-    // TODO get Array methods need to return cloned data, to maintain this directory's integrity
 
     /** Map of values hashed by type identifiers. */
     @NotNull
@@ -341,11 +340,6 @@ public abstract class Directory
         if (!_tagMap.containsKey(Integer.valueOf(tagType))) {
             _definedTagList.add(new Tag(tagType, this));
         }
-//        else {
-//            final Object oldValue = _tagMap.get(tagType);
-//            if (!oldValue.equals(value))
-//                addError(String.format("Overwritten tag 0x%s (%s).  Old=%s, New=%s", Integer.toHexString(tagType), getTagName(tagType), oldValue, value));
-//        }
         _tagMap.put(tagType, value);
     }
 
@@ -733,7 +727,7 @@ public abstract class Directory
         if (o instanceof String) {
             // This seems to cover all known Exif date strings
             // Note that "    :  :     :  :  " is a valid date string according to the Exif spec (which means 'unknown date'): http://www.awaresystems.be/imaging/tiff/tifftags/privateifd/exif/datetimeoriginal.html
-            String datePatterns[] = {
+            String[] datePatterns = {
                     "yyyy:MM:dd HH:mm:ss",
                     "yyyy:MM:dd HH:mm",
                     "yyyy-MM-dd HH:mm:ss",

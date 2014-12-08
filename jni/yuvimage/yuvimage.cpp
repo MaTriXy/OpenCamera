@@ -21,50 +21,39 @@ by Almalence Inc. All Rights Reserved.
 #include <jni.h>
 #include <android/log.h>
 
-#include "CreateJavaOutputStreamAdaptor.h"
-#include "YuvToJpegEncoder.h"
+#include "YuvToJpegEncoderMT.h"
 
-static unsigned char *yuv[50] = {NULL};
+static unsigned char *yuv;
 static int SX = 0;
 static int SY = 0;
 
-extern "C" {
-JNIEXPORT jboolean JNICALL Java_com_almalence_YuvImage_SaveJpegFreeOut
-(
-	JNIEnv* env, jobject, jint jout,
-	int format, int width, int height, jintArray offsets,
-	jintArray strides, int jpegQuality, jobject jstream,
-	jbyteArray jstorage
-);
 
-};
-
-JNIEXPORT jboolean JNICALL Java_com_almalence_YuvImage_SaveJpegFreeOut
+extern "C" JNIEXPORT jboolean JNICALL Java_com_almalence_YuvImage_SaveJpegFreeOutMT
 (
-	JNIEnv* env, jobject, jint jout,
+	JNIEnv* env, jobject, int jout,
 	int format, int width, int height, jintArray offsets,
-	jintArray strides, int jpegQuality, jobject jstream,
-	jbyteArray jstorage
+	jintArray strides, int jpegQuality, jobject jstream, jbyteArray jstorage
 )
 {
 	jbyte* OutPic;
 
-	OutPic = (jbyte*)jout;
+	OutPic = (jbyte *)jout;
 
-	SkWStream* strm = CreateJavaOutputStreamAdaptor(env, jstream, jstorage);
+	initStreamMethods(env);
 
 	jint* imgOffsets = env->GetIntArrayElements(offsets, NULL);
 	jint* imgStrides = env->GetIntArrayElements(strides, NULL);
-	YuvToJpegEncoder* encoder = YuvToJpegEncoder::create(format, imgStrides);
-	if (encoder == NULL)
+
+	if (YuvToJpegEncoderMT_init(format, imgStrides))
 	{
 		free(OutPic);
 		return false;
 	}
 
-	bool result = encoder->encode(strm, OutPic, width, height, imgOffsets, jpegQuality);
+	boolean result = true;
 
-	delete encoder;
+	result = YuvToJpegEncoderMT_encode(env, jstream, jstorage, (uint8_t*)OutPic, width, height, imgOffsets, imgStrides, jpegQuality, format);
+
 	env->ReleaseIntArrayElements(offsets, imgOffsets, 0);
 	env->ReleaseIntArrayElements(strides, imgStrides, 0);
 
@@ -74,28 +63,25 @@ JNIEXPORT jboolean JNICALL Java_com_almalence_YuvImage_SaveJpegFreeOut
 extern "C" JNIEXPORT void JNICALL Java_com_almalence_YuvImage_RemoveFrame
 (
 	JNIEnv* env,
-	jobject thiz,
-	jint index
+	jobject thiz
 )
 {
-	free((void*)yuv[index]);
+	free((void*)yuv);
 }
 
 extern "C" JNIEXPORT jint JNICALL Java_com_almalence_YuvImage_GetFrame
 (
 	JNIEnv* env,
-	jobject thiz,
-	jint index
+	jobject thiz
 )
 {
-	return (jint)yuv[index];
+	return (jint)yuv;
 }
 
 extern "C" JNIEXPORT jbyte* JNICALL Java_com_almalence_YuvImage_GetByteFrame
 (
 	JNIEnv* env,
-	jobject thiz,
-	jint index
+	jobject thiz
 )
 {
 	int x, y;
@@ -103,38 +89,60 @@ extern "C" JNIEXPORT jbyte* JNICALL Java_com_almalence_YuvImage_GetByteFrame
 	unsigned char * pixels;
 
 	jpixels = env->NewByteArray(SX*SY+SX*((SY+1)/2));
-
 	pixels = (unsigned char *)env->GetByteArrayElements(jpixels, NULL);
+	memcpy (pixels, yuv, SX*SY+SX*((SY+1)/2));
+	env->ReleaseByteArrayElements(jpixels, (jbyte*)pixels, 0);
 
-//	for (y=0; y<SY; ++y)
-//	{
-//		for (x=0; x<SX; ++x)
-//		{
-//			pixels[y+x] = yuv[index][y+x];
-//		}
-//	}
-
-	for (y=0; y<SY; y+=2)
-		{
-			// Y
-			memcpy (&pixels[y*SX],     &yuv[index][y*SX],   SX);
-			memcpy (&pixels[(y+1)*SX], &yuv[index][(y+1)*SX], SX);
-
-			// UV - no direct memcpy as swap may be needed
-			for (x=0; x<SX/2; ++x)
-			{
-				// U
-				pixels[SX*SY+(y/2)*SX+x*2+1] = yuv[index][SX*SY+(y/2)*SX+x*2+1];
-
-				// V
-				pixels[SX*SY+(y/2)*SX+x*2]   = yuv[index][SX*SY+(y/2)*SX+x*2];
-			}
-		}
-
-	env->ReleaseByteArrayElements(jpixels, (jbyte*)pixels, JNI_ABORT);
+	free(yuv);
 
 	return (jbyte *)jpixels;
 }
+
+
+void ExtractYuvFromDirectBuffer
+(
+	unsigned char *Y,
+	unsigned char *U,
+	unsigned char *V,
+	unsigned char *yuv,
+	jint pixelStrideY,
+	jint rowStrideY,
+	jint pixelStrideU,
+	jint rowStrideU,
+	jint pixelStrideV,
+	jint rowStrideV,
+	jint sx,
+	jint sy
+)
+{
+	int i, y;
+
+	// Note: assumption of:
+	// - even w, h, x0 here
+	// - pixelStrideY=1 (guaranteed by android doc)
+	// - U,V being sub-sampled 2x horizontally and vertically
+	#pragma omp parallel for schedule(guided)
+	for (y=0; y<sy; y+=2)
+	{
+		int x;
+
+		// Y
+		memcpy (&yuv[y*sx],     &Y[y*rowStrideY],   sx);
+		memcpy (&yuv[(y+1)*sx], &Y[(y+1)*rowStrideY], sx);
+
+		// UV - no direct memcpy as swap may be needed
+		for (x=0; x<sx/2; ++x)
+		{
+			// V
+			yuv[sx*sy+(y/2)*sx+x*2]   = V[x*pixelStrideV + (y/2)*rowStrideV];
+
+			// U
+			yuv[sx*sy+(y/2)*sx+x*2+1] = U[x*pixelStrideU + (y/2)*rowStrideU];
+		}
+	}
+
+}
+
 
 extern "C" JNIEXPORT int JNICALL Java_com_almalence_YuvImage_CreateYUVImage
 (
@@ -150,13 +158,10 @@ extern "C" JNIEXPORT int JNICALL Java_com_almalence_YuvImage_CreateYUVImage
 		jint pixelStrideV,
 		jint rowStrideV,
 		jint sx,
-		jint sy,
-		jint n
+		jint sy
 )
 {
-	int i, x, y;
 	unsigned char *Y, *U, *V;
-	unsigned char *UV;
 
 	// All Buffer objects have an effectiveDirectAddress field
 	Y = (unsigned char*)env->GetDirectBufferAddress(bufY);
@@ -169,36 +174,66 @@ extern "C" JNIEXPORT int JNICALL Java_com_almalence_YuvImage_CreateYUVImage
 	SX = sx;
 	SY = sy;
 
-	// extract crop as NV21 image
-	yuv[n] = (unsigned char *)malloc (sx*sy+sx*((sy+1)/2));
-	if (yuv[n] == NULL)
+	// extract as NV21 image
+	yuv = (unsigned char *)malloc (sx*sy+sx*((sy+1)/2));
+	if (yuv == NULL)
 		return -2;
 
-	__android_log_print(ANDROID_LOG_INFO, "OpenCamera. CreateYUV", "Allocated memory for frame %d", n);
+	ExtractYuvFromDirectBuffer(Y, U, V, yuv, pixelStrideY, rowStrideY, pixelStrideU, rowStrideU, pixelStrideV, rowStrideV, sx, sy);
 
-	// Note: assumption of:
-	// - even w, h, x0 here (guaranteed by SZ requirements)
-	// - pixelStrideY=1 (guaranteed by android doc)
-	// - U,V being sub-sampled 2x horizontally and vertically
-	for (y=0; y<sy; y+=2)
-	{
-		// Y
-		memcpy (&yuv[n][y*sx],     &Y[y*rowStrideY],   sx);
-		memcpy (&yuv[n][(y+1)*sx], &Y[(y+1)*rowStrideY], sx);
-
-		// UV - no direct memcpy as swap may be needed
-		for (x=0; x<sx/2; ++x)
-		{
-			// U
-			yuv[n][sx*sy+(y/2)*sx+x*2+1] = U[x*pixelStrideU + (y/2)*rowStrideU];
-
-			// V
-			yuv[n][sx*sy+(y/2)*sx+x*2]   = V[x*pixelStrideV + (y/2)*rowStrideV];
-		}
-	}
+	__android_log_print(ANDROID_LOG_INFO, "OpenCamera. CreateYUV", "NV21 created");
 
 	return 0;
 }
+
+
+extern "C" JNIEXPORT jbyte* JNICALL Java_com_almalence_YuvImage_CreateYUVImageByteArray
+(
+		JNIEnv* env,
+		jobject thiz,
+		jobject bufY,
+		jobject bufU,
+		jobject bufV,
+		jint pixelStrideY,
+		jint rowStrideY,
+		jint pixelStrideU,
+		jint rowStrideU,
+		jint pixelStrideV,
+		jint rowStrideV,
+		jint sx,
+		jint sy
+)
+{
+	unsigned char *Y, *U, *V;
+
+	// All Buffer objects have an effectiveDirectAddress field
+	Y = (unsigned char*)env->GetDirectBufferAddress(bufY);
+	U = (unsigned char*)env->GetDirectBufferAddress(bufU);
+	V = (unsigned char*)env->GetDirectBufferAddress(bufV);
+
+	if ((Y == NULL) || (U == NULL) || (V == NULL))
+		return NULL;
+
+	SX = sx;
+	SY = sy;
+
+	// extract crop as NV21 image
+	jbyteArray jpixels = NULL;
+	unsigned char * single_yuv;
+
+	jpixels = env->NewByteArray(SX*SY+SX*((SY+1)/2));
+
+	single_yuv = (unsigned char *)env->GetByteArrayElements(jpixels, NULL);
+	if (single_yuv == NULL)
+		return NULL;
+
+	ExtractYuvFromDirectBuffer(Y, U, V, single_yuv, pixelStrideY, rowStrideY, pixelStrideU, rowStrideU, pixelStrideV, rowStrideV, sx, sy);
+
+	env->ReleaseByteArrayElements(jpixels, (jbyte*)single_yuv, 0);
+
+	return (jbyte *)jpixels;
+}
+
 
 extern "C" JNIEXPORT int JNICALL Java_com_almalence_YuvImage_AllocateMemoryForYUV
 (
@@ -211,3 +246,4 @@ extern "C" JNIEXPORT int JNICALL Java_com_almalence_YuvImage_AllocateMemoryForYU
 	unsigned char* yuv_mem = (unsigned char *)malloc (sx*sy+sx*((sy+1)/2));
 	return (jint)yuv_mem;
 }
+

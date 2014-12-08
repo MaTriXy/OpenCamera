@@ -1,6 +1,13 @@
 <!-- -+-  -->
 <PreferenceScreen
  xmlns:android="http://schemas.android.com/apk/res/android">
+ 
+    	<PreferenceScreen
+			 android:fragment="com.almalence.opencam.Fragment"
+			 android:title="@string/Pref_Dro_Preference_Title">
+			 <extra android:name="type" android:value="dro"/>
+		</PreferenceScreen>
+		
 		<PreferenceScreen
 			 android:fragment="com.almalence.opencam.Fragment"
 			 android:title="@string/Pref_Burst_Title">
@@ -39,38 +46,28 @@
 		
 		<PreferenceScreen
 			 android:fragment="com.almalence.opencam.Fragment"
-			 android:title="@string/Pref_ObjectRemoval_Title">
-			 <extra android:name="type" android:value="objectremoval"/>
+			 android:title="@string/Pref_MultiShot_Title">
+			 <extra android:name="type" android:value="multishot"/>
 		</PreferenceScreen>
-		
-		<PreferenceScreen
-			 android:fragment="com.almalence.opencam.Fragment"
-			 android:title="@string/Pref_Groupshot_Title">
-			 <extra android:name="type" android:value="groupshot"/>
-		</PreferenceScreen>
-		
-		<PreferenceScreen
-			 android:fragment="com.almalence.opencam.Fragment"
-			 android:title="@string/Pref_Sequence_Title">
-			 <extra android:name="type" android:value="sequence"/>
-		</PreferenceScreen>
-		
+
 		<PreferenceScreen
 			 android:fragment="com.almalence.opencam.Fragment"
 			 android:title="@string/Pref_PanoramaAugmented_Title">
 			 <extra android:name="type" android:value="panorama_augmented"/>
 		</PreferenceScreen>
-		
-		<PreferenceScreen
-			 android:fragment="com.almalence.opencam.Fragment"
-			 android:title="@string/Pref_BestShot_Title">
-			 <extra android:name="type" android:value="bestshotmode"/>
-		</PreferenceScreen>
+
 </PreferenceScreen>
 <!--  -+- -->
 <!-- +++
 <PreferenceScreen
  xmlns:android="http://schemas.android.com/apk/res/android">
+ 
+ 		<PreferenceScreen
+			 android:fragment="com.almalence.opencam_plus.Fragment"
+			 android:title="@string/Pref_Dro_Preference_Title">
+			 <extra android:name="type" android:value="dro"/>
+		</PreferenceScreen>
+ 
 		<PreferenceScreen
 			 android:fragment="com.almalence.opencam_plus.Fragment"
 			 android:title="@string/Pref_Burst_Title">
@@ -109,20 +106,8 @@
 		
 		<PreferenceScreen
 			 android:fragment="com.almalence.opencam_plus.Fragment"
-			 android:title="@string/Pref_ObjectRemoval_Title">
-			 <extra android:name="type" android:value="objectremoval"/>
-		</PreferenceScreen>
-		
-		<PreferenceScreen
-			 android:fragment="com.almalence.opencam_plus.Fragment"
-			 android:title="@string/Pref_Groupshot_Title">
-			 <extra android:name="type" android:value="groupshot"/>
-		</PreferenceScreen>
-		
-		<PreferenceScreen
-			 android:fragment="com.almalence.opencam_plus.Fragment"
-			 android:title="@string/Pref_Sequence_Title">
-			 <extra android:name="type" android:value="sequence"/>
+			 android:title="@string/Pref_MultiShot_Title">
+			 <extra android:name="type" android:value="multishot"/>
 		</PreferenceScreen>
 		
 		<PreferenceScreen
@@ -131,10 +116,5 @@
 			 <extra android:name="type" android:value="panorama_augmented"/>
 		</PreferenceScreen>
 		
-		<PreferenceScreen
-			 android:fragment="com.almalence.opencam_plus.Fragment"
-			 android:title="@string/Pref_BestShot_Title">
-			 <extra android:name="type" android:value="bestshotmode"/>
-		</PreferenceScreen>
 </PreferenceScreen>
 +++ -->

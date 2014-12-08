@@ -31,7 +31,7 @@
  SPECIAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE, MISUSE OR
  INABILITY TO USE THE SOFTWARE OR RELATED DOCUMENTATION.
 
- COPYRIGHT 2010-2012, ALMALENCE, INC.
+ COPYRIGHT 2010-2014, ALMALENCE, INC.
 
  ---------------------------------------------------------------------------
 
@@ -195,6 +195,28 @@ void Filters_PostFilter
 	int sharpen
 );
 
+void Filters_OuterMirrorFill
+(
+	Uint8 *in,
+	int sx,
+	int sy,
+	int x0,
+	int y0,
+	int w,
+	int h
+);
+
+void Filters_FillFilterPressure
+(
+	Int32 Scale,
+	int sx,
+	int sy,
+	Uint8 *nMov,
+	Uint8 *mcurTbl,
+	int subsampMov,
+	int sxMov
+);
+
 void Filters_PostFilterQuick
 (
 	void *instance,
@@ -203,8 +225,24 @@ void Filters_PostFilterQuick
 	Int32 Scale,
 	int sx,
 	int sy,
+	int sharpen,
+    Uint8 *nMov,
+    Uint8 *mcurTbl,
+    int subsampMov,
+    int sxMov
+);
+
+void Filters_PostFilterQuick_CPU
+(
+	void *instance,
+	Uint8 *Y,
+	int sx,
+	int sy,
 	int stride,
-	int sharpen
+	int sharpen,
+    Uint8 *mcurTbl,
+    int subsampMov,
+    int sxMov
 );
 
 void Filters_PostFilterUV
@@ -229,11 +267,32 @@ int Filters_DownscaleLowSpatial
 	Uint8 **quarterOut
 );
 
+int Filters_DownscaleLowSpatial16bit
+(
+	void *instance,
+	Uint8 *in,
+	Uint8 *inUV,
+	int sx,
+	int sy,
+	Int16 **quarterIn,
+	Int16 **quarterOut
+);
+
 int Filters_GetFilteredLowSpatial
 (
 	void *instance,
 	Uint8 *qIn,
 	Uint8 *qOut,
+	int sxs,
+	int sys,
+	int Filter
+);
+
+int Filters_GetFilteredLowSpatial16bit
+(
+	void *instance,
+	Int16 *qIn,
+	Int16 *qOut,
 	int sxs,
 	int sys,
 	int Filter
@@ -247,7 +306,20 @@ void Filters_ResidualQuarterCompute
 	int sx,
 	int sy,
 	int sxs,
-	int sys
+	int sys,
+	int pressure
+);
+
+void Filters_ResidualQuarterCompute16bit
+(
+	Uint8 *in,
+	Int16 *quarterIn,
+	Int16 *quarterOut,
+	int sx,
+	int sy,
+	int sxs,
+	int sys,
+	int pressure
 );
 
 void Filters_ResidualQuarterComputeUV
@@ -258,7 +330,20 @@ void Filters_ResidualQuarterComputeUV
 	int sx,
 	int sy,
 	int sxs,
-	int sys
+	int sys,
+	int stride
+);
+
+void Filters_ResidualQuarterComputeUV16bit
+(
+	Uint8 *in,
+	Int16 *quarterIn,
+	Int16 *quarterOut,
+	int sx,
+	int sy,
+	int sxs,
+	int sys,
+	int stride
 );
 
 // Filter lower spatial components of the frame
@@ -279,7 +364,25 @@ void Filters_FilterLowSpatialUV
 	Uint8 *inUV,
 	int sx,
 	int sy,
-	int Filter
+	int Filter,
+	int stride
+);
+
+void Filters_FilterMoving
+(
+	void *instance,
+	Uint8 *Y,
+	Uint8 *nMov,
+	Int32 Scale,
+//	int mtx,
+//	int mty,
+	int x_st,
+	int y_st,
+	int x_en,
+	int y_en,
+	int sx,
+    int sy,
+    int stride
 );
 
 

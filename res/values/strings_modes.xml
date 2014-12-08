@@ -17,6 +17,7 @@
     
     <string name="night_mode_name">Night</string>
     <string name="night_mode_howto"></string>
+    <string name="super_mode_name">Super</string>
     
     <string name="video_mode_name">Video</string>
     <string name="video_mode_howto"></string>
@@ -26,6 +27,9 @@
     
     <string name="objectremoval_mode_name">Object removal</string>
     <string name="objectremoval_mode_howto"></string>
+    
+    <string name="multishot_mode_name">Smart multishot</string>
+	<string name="multishot_mode_howto"></string>
     
     <string name="groupshot_mode_name">Group shot</string>
     <string name="groupshot_mode_howto"></string>
