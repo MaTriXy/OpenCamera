@@ -32,6 +32,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PorterDuff.Mode;
+import android.graphics.Matrix;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.RadialGradient;
 import android.graphics.Rect;
@@ -44,6 +45,7 @@ import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.graphics.drawable.shapes.RoundRectShape;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Message;
 import android.preference.PreferenceManager;
 import android.util.DisplayMetrics;
@@ -88,6 +90,7 @@ import com.almalence.util.ImageConversion;
 import com.almalence.asynctaskmanager.OnTaskCompleteListener;
 
 import com.almalence.plugins.capture.expobracketing.ExpoBracketingCapturePlugin;
+import com.almalence.plugins.capture.panoramaaugmented.AugmentedPanoramaEngine;
 
 /***
  * Implements HDR processing plugin.
@@ -257,6 +260,20 @@ public class HDRProcessingPlugin extends PluginProcessing implements OnItemClick
 					byte[] buffer = SwapHeap.CopyFromHeap(compressed_frame[ExpoBracketingCapturePlugin.evIdx[i]],
 							compressed_frame_len[ExpoBracketingCapturePlugin.evIdx[i]]);
 					int yuvBuffer = compressed_frame[ExpoBracketingCapturePlugin.evIdx[i]];
+					
+					
+			
+					if (Build.MODEL.contains("Nexus 6") && CameraController.isFrontCamera())
+					{
+						int imageWidth = MainScreen.getPreviewWidth();
+						int imageHeight = MainScreen.getPreviewHeight();
+						ImageConversion.TransformNV21N(yuvBuffer,
+								yuvBuffer,
+								imageWidth,
+								imageHeight,
+								1, 1, 0);
+					}
+					
 					PluginManager.getInstance().writeData(os, true, sessionID, i, buffer, yuvBuffer, file);
 				}
 			} catch (IOException e)
@@ -288,6 +305,15 @@ public class HDRProcessingPlugin extends PluginProcessing implements OnItemClick
 
 	private void HDRProcessing()
 	{
+		if (HDRProcessingPlugin.SaveInputPreference == 0)
+		if (Build.MODEL.contains("Nexus 6") && CameraController.isFrontCamera())
+		{
+			if (mDisplayOrientationOnStartProcessing==0 || mDisplayOrientationOnStartProcessing==90)
+				mDisplayOrientationOnStartProcessing+=180;
+			else if (mDisplayOrientationOnStartProcessing==180 || mDisplayOrientationOnStartProcessing==270)
+				mDisplayOrientationOnStartProcessing-=180;
+		}
+		
 		yuv = AlmaShotHDR.HDRProcess(mImageWidth, mImageHeight, HDRProcessingPlugin.crop,
 				mDisplayOrientationOnStartProcessing, mCameraMirrored);
 	}
@@ -494,7 +520,7 @@ public class HDRProcessingPlugin extends PluginProcessing implements OnItemClick
 				(bitmap.getHeight() - side) / 2, side, side);
 
 		System.gc();
-		final Bitmap output = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888);
+		Bitmap output = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888);
 
 		Canvas canvas = new Canvas(output);
 
@@ -512,6 +538,14 @@ public class HDRProcessingPlugin extends PluginProcessing implements OnItemClick
 		paint.setXfermode(new PorterDuffXfermode(Mode.SRC_IN));
 		canvas.drawBitmap(bitmapCropped, rect, rect, paint);
 
+		if (HDRProcessingPlugin.SaveInputPreference == 0)
+			if (Build.MODEL.contains("Nexus 6") && CameraController.isFrontCamera())
+			{	
+				Matrix matrix = new Matrix();
+				matrix.postRotate(180);
+				output = Bitmap.createBitmap(output, 0, 0, output.getWidth(), output.getHeight(), matrix, true);
+			}
+		
 		return output;
 	}
 
@@ -1243,6 +1277,14 @@ public class HDRProcessingPlugin extends PluginProcessing implements OnItemClick
 			} else
 			{
 				this.previewTaskCurrent = null;
+
+				if (HDRProcessingPlugin.SaveInputPreference == 0)
+					if (Build.MODEL.contains("Nexus 6") && CameraController.isFrontCamera())
+					{	
+						Matrix matrix = new Matrix();
+						matrix.postRotate(180);
+						this.bitmap = Bitmap.createBitmap(this.bitmap, 0, 0, this.bitmap.getWidth(), this.bitmap.getHeight(), matrix, true);
+					}
 
 				this.imageView.setImageBitmap(this.bitmap);
 			}

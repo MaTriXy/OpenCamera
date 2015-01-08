@@ -255,6 +255,8 @@ public class VideoCapturePlugin extends PluginCapture
 				} else
 				{
 					ModePreference = "1";
+					if (Build.MODEL.contains("Nexus 6"))
+						Toast.makeText(MainScreen.getMainContext(), "Not suported on Nexus 6 currently. Will be fixed in next release.", Toast.LENGTH_LONG).show();					
 				}
 
 				SharedPreferences.Editor editor = prefs.edit();
@@ -1779,12 +1781,23 @@ public class VideoCapturePlugin extends PluginCapture
 		// Step 5: Set the preview output
 		mMediaRecorder.setPreviewDisplay(MainScreen.getPreviewSurfaceHolder().getSurface());
 
-		mMediaRecorder
-				.setOrientationHint(CameraController.isFrontCamera() ? (MainScreen.getWantLandscapePhoto() ? MainScreen
-						.getGUIManager().getDisplayOrientation()
-						: (MainScreen.getGUIManager().getDisplayOrientation() + 180) % 360) : MainScreen
-						.getGUIManager().getDisplayOrientation());
-
+		if (Build.MODEL.contains("Nexus 6") && CameraController.isFrontCamera())
+		{
+			mMediaRecorder
+				.setOrientationHint(MainScreen.getWantLandscapePhoto() 
+								? (MainScreen.getGUIManager().getDisplayOrientation()+180)% 360
+								: (MainScreen.getGUIManager().getDisplayOrientation()) % 360);
+		}
+		else
+		{
+			mMediaRecorder
+				.setOrientationHint(CameraController.isFrontCamera() 
+						? (MainScreen.getWantLandscapePhoto() 
+								? MainScreen.getGUIManager().getDisplayOrientation()
+								: (MainScreen.getGUIManager().getDisplayOrientation() + 180) % 360) 
+						: MainScreen.getGUIManager().getDisplayOrientation());
+		}
+ 
 		// Step 6: Prepare configured MediaRecorder
 		try
 		{
@@ -2300,7 +2313,7 @@ public class VideoCapturePlugin extends PluginCapture
 
 	public void takePicture()
 	{
-		CameraController.captureImagesWithParams(1, CameraController.JPEG, null, null, null, null, true);
+		CameraController.captureImagesWithParams(1, CameraController.JPEG, null, null, null, null, true, true);
 	}
 
 	// timelapse values

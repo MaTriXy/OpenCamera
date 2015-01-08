@@ -60,6 +60,7 @@ public class NightProcessingPlugin extends PluginProcessing implements OnTaskCom
 
 	private int				mDisplayOrientation	= 0;
 	private boolean			mCameraMirrored		= false;
+	private int                 cameraIndex = 0;
 
 	private int				mImageWidth;
 	private int				mImageHeight;
@@ -81,8 +82,13 @@ public class NightProcessingPlugin extends PluginProcessing implements OnTaskCom
 	{
 		sessionID = SessionID;
 
-		PluginManager.getInstance().addToSharedMem("modeSaveName" + sessionID,
-				PluginManager.getInstance().getActiveMode().modeSaveName);
+		if (CameraController.isUseHALv3()) {
+			PluginManager.getInstance().addToSharedMem("modeSaveName" + sessionID,
+					PluginManager.getInstance().getActiveMode().modeSaveNameHAL);
+		} else {
+			PluginManager.getInstance().addToSharedMem("modeSaveName" + sessionID,
+					PluginManager.getInstance().getActiveMode().modeSaveName);
+		}
 
 		mDisplayOrientation = Integer.parseInt(PluginManager.getInstance().getFromSharedMem(
 				"frameorientation1" + sessionID));
@@ -91,6 +97,10 @@ public class NightProcessingPlugin extends PluginProcessing implements OnTaskCom
 		CameraController.Size imageSize = CameraController.getCameraImageSize();
 		mImageWidth = imageSize.getWidth();
 		mImageHeight = imageSize.getHeight();
+		
+		// camera profile indexes in libalmalib
+		if (Build.MODEL.contains("Nexus 5")) cameraIndex = 100;
+		if (Build.MODEL.contains("Nexus 6")) cameraIndex = 103;
 
 		AlmaShotNight.Initialize();
 
@@ -140,7 +150,15 @@ public class NightProcessingPlugin extends PluginProcessing implements OnTaskCom
 		boolean isSuperMode = Boolean.parseBoolean(PluginManager.getInstance().getFromSharedMem(
 				"isSuperMode" + sessionID));
 		int sensorGain = Integer.parseInt(PluginManager.getInstance().getFromSharedMem(
-				"sensorGain" + sessionID));
+				"burstGain" + sessionID));
+		
+		if (Build.MODEL.contains("Nexus 6") && CameraController.isFrontCamera())
+		{
+			if (mDisplayOrientation==0 || mDisplayOrientation==90)
+				mDisplayOrientation+=180;
+			else if (mDisplayOrientation==180 || mDisplayOrientation==270)
+				mDisplayOrientation-=180;
+		}
 		
 		yuv = AlmaShotNight.Process(mImageWidth, mImageHeight, mImageWidth, mImageHeight,
 				sensorGain, Integer.parseInt(NoisePreference), Integer.parseInt(GhostPreference),
@@ -148,7 +166,7 @@ public class NightProcessingPlugin extends PluginProcessing implements OnTaskCom
 				NightProcessingPlugin.crop,
 				mDisplayOrientation,
 				mCameraMirrored,
-				zoom, isSuperMode);
+				zoom, cameraIndex, isSuperMode);
 
 		AlmaShotNight.Release();
 	}

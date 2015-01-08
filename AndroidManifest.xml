@@ -4,15 +4,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	  package="com.almalence.opencam_plus"
       android:installLocation="auto"
-      android:versionCode="65"
-      android:versionName="3.28">
+      android:versionCode="66"
+      android:versionName="3.29">
 +++ -->
 <!-- -+-  -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	  package="com.almalence.opencam"
       android:installLocation="auto"
-      android:versionCode="81"
-      android:versionName="3.28">
+      android:versionCode="83"
+      android:versionName="3.29">
 <!--  -+- -->
 
     <supports-screens       
@@ -84,6 +84,9 @@
 				        
 		<activity android:name="com.almalence.opencam_plus.FolderPicker"
 		        		android:label="@string/choose_folder"/>
+		        		
+		<activity android:name="com.almalence.opencam_plus.FolderPickerLollipop"
+		        		android:label="@string/choose_folder"/>
 		+++ -->
 		<!-- -+-  -->
 		<activity android:name="com.almalence.opencam.Processing"
@@ -96,6 +99,9 @@
 				        android:hardwareAccelerated="true"/>
 		
 		<activity android:name="com.almalence.opencam.FolderPicker"
+		        		android:label="@string/choose_folder"/>
+		
+		<activity android:name="com.almalence.opencam.FolderPickerLollipop"
 		        		android:label="@string/choose_folder"/>
 		<!--  -+- -->
 				
@@ -110,7 +116,12 @@
 		    </intent-filter>            
 		</receiver>
 		
+		<!-- +++
+		<receiver android:name="com.almalence.opencam_plus.AlarmReceiver"></receiver>
+		+++ -->
+		<!-- -+-  -->
 		<receiver android:name="com.almalence.opencam.AlarmReceiver"></receiver>
+		<!--  -+- -->
 
 		<!-- Uncomment for Amazon market 1st part 
 		<receiver android:name="com.amazon.inapp.purchasing.ResponseReceiver">

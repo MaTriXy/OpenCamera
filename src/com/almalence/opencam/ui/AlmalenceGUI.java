@@ -317,6 +317,10 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 																							R.drawable.gui_almalence_settings_iso_1600);
 																					put(CameraParameters.ISO_3200,
 																							R.drawable.gui_almalence_settings_iso_3200);
+																					put(CameraParameters.ISO_6400,
+																							R.drawable.gui_almalence_settings_iso_6400);
+																					put(CameraParameters.ISO_10000,
+																							R.drawable.gui_almalence_settings_iso_10000);																					
 																				}
 																			};
 
@@ -371,6 +375,18 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 																							.getString(
 																									R.string.iso3200DefaultSystem),
 																							R.drawable.gui_almalence_settings_iso_3200);
+																					put(MainScreen
+																							.getInstance()
+																							.getResources()
+																							.getString(
+																									R.string.iso6400DefaultSystem),
+																							R.drawable.gui_almalence_settings_iso_6400);
+																					put(MainScreen
+																							.getInstance()
+																							.getResources()
+																							.getString(
+																									R.string.iso10000DefaultSystem),
+																							R.drawable.gui_almalence_settings_iso_10000);																					
 																				}
 																			};
 
@@ -686,6 +702,18 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 																									.getResources()
 																									.getString(
 																											R.string.iso3200));
+																					put(CameraParameters.ISO_6400,
+																							MainScreen
+																									.getInstance()
+																									.getResources()
+																									.getString(
+																											R.string.iso6400));
+																					put(CameraParameters.ISO_10000,
+																							MainScreen
+																									.getInstance()
+																									.getResources()
+																									.getString(
+																											R.string.iso10000));
 																				}
 																			};
 
@@ -2900,7 +2928,7 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 		{
 			public void onClick(View v)
 			{
-				quickControlOnClick(MODE_ISO, MainScreen.getMainContext().getResources().getDrawable(ICONS_FLASH.get(mFlashMode)));
+				quickControlOnClick(MODE_FLASH, MainScreen.getMainContext().getResources().getDrawable(ICONS_FLASH.get(mFlashMode)));
 			}
 
 		});
@@ -3948,6 +3976,9 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 	@Override
 	public void onButtonClick(View button)
 	{
+		if (!MainScreen.isApplicationStarted())
+			return;
+		
 		// hide hint screen
 		if (guiView.findViewById(R.id.hintLayout).getVisibility() == View.VISIBLE)
 			guiView.findViewById(R.id.hintLayout).setVisibility(View.INVISIBLE);
@@ -6268,7 +6299,7 @@ public class AlmalenceGUI extends GUI implements SeekBar.OnSeekBarChangeListener
 	{
 		try
 		{
-			MainScreen.getInstance().startActivity(new Intent(Intent.ACTION_VIEW, uri));
+			MainScreen.getInstance().startActivity(new Intent("com.android.camera.action.REVIEW", uri));
 		} catch (ActivityNotFoundException ex)
 		{
 			try

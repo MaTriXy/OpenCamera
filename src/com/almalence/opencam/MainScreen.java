@@ -683,8 +683,8 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		// ImageReader for preview frames in YUV format
 		thiz.mImageReaderPreviewYUV = ImageReader.newInstance(thiz.previewWidth, thiz.previewHeight,
 				ImageFormat.YUV_420_888, 2);
-		// thiz.mImageReaderPreviewYUV = ImageReader.newInstance(1280, 960,
-		// ImageFormat.YUV_420_888, 1);
+//		 thiz.mImageReaderPreviewYUV = ImageReader.newInstance(1280, 960,
+//		 ImageFormat.YUV_420_888, 1);
 
 		CameraController.Size imageSize = CameraController.getCameraImageSize();
 		// ImageReader for YUV still images
@@ -1236,6 +1236,8 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		this.hideOpenGLLayer();
 	}
 
+	private CountDownTimer onResumeTimer = null;
+	
 	@Override
 	protected void onResume()
 	{
@@ -1244,7 +1246,7 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		isCameraConfiguring = false;
 
 		if (!isCreating)
-			new CountDownTimer(50, 50)
+			onResumeTimer = new CountDownTimer(50, 50)
 			{
 				public void onTick(long millisUntilFinished)
 				{
@@ -1273,7 +1275,7 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 					captureRAW = prefs.getBoolean(MainScreen.sCaptureRAWPref, false);
 
 					CameraController.useHALv3(prefs.getBoolean(getResources()
-							.getString(R.string.Preference_UseHALv3Key), CameraController.isNexus() ? true : false));
+							.getString(R.string.Preference_UseHALv3Key), CameraController.isNexus5() ? true : false));
 					prefs.edit()
 							.putBoolean(getResources().getString(R.string.Preference_UseHALv3Key),
 									CameraController.isUseHALv3()).commit();
@@ -1332,7 +1334,7 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 					Toast.LENGTH_LONG).show();
 
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-		boolean dismissKeyguard = prefs.getBoolean("dismissKeyguard", true);
+		boolean dismissKeyguard = prefs.getBoolean("dismissKeyguard", false);
 		if (dismissKeyguard)
 			getWindow()
 					.addFlags(
@@ -1355,7 +1357,7 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 
 	public void relaunchCamera()
 	{
-		if (CameraController.isUseHALv3())
+		if (CameraController.isUseHALv3() || PluginManager.getInstance().isRestart())
 		{
 			new CountDownTimer(100, 100)
 			{
@@ -1402,6 +1404,11 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 	protected void onPause()
 	{
 		super.onPause();
+		
+		if (onResumeTimer != null) {
+			onResumeTimer.cancel();
+		}
+		
 		mApplicationStarted = false;
 
 		MainScreen.getGUIManager().onPause();
@@ -1662,6 +1669,25 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		{
 			try
 			{
+//				List fpslists=CameraController.getCamera().getParameters().getSupportedPreviewFpsRange();
+//				int[] range = { 0, 0 };
+//				CameraController.getCamera().getParameters().getPreviewFpsRange(range);
+//				if (Build.MODEL.contains("Nexus 6"))
+//				{
+//					int[] range2 = { 0, 0 };
+//					CameraController.getCamera().getParameters().getPreviewFpsRange(range2);
+//					
+//					cp.setPreviewFpsRange(30000, 30000);
+//					CameraController.setCameraParameters(cp);
+//					cp = CameraController.getCameraParameters();
+//					
+//					int[] range = { 0, 0 };
+//					CameraController.getCamera().getParameters().getPreviewFpsRange(range);
+//					
+//					List fpslists=CameraController.getCamera().getParameters().getSupportedPreviewFpsRange();
+//					List fpslists2=CameraController.getCamera().getParameters().getSupportedPreviewFpsRange();
+//				}
+
 				// Nexus 5 is giving preview which is too dark without this
 				if (Build.MODEL.contains("Nexus 5"))
 				{
@@ -1863,7 +1889,9 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		CameraController.setCaptureFormat(captureFormat);
 		// configure camera with all the surfaces to be ever used
 
-		CameraController.createCaptureSession(surfaceList);
+		//If camera device isn't initialized (equals null) just force stop application.
+		if(!CameraController.createCaptureSession(surfaceList))
+			PluginManager.getInstance().sendMessage(PluginManager.MSG_APPLICATION_STOP, 0);
 	}
 
 	private void prepareMeteringAreas()
@@ -2144,9 +2172,14 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		PluginManager.getInstance().onShutter();
 	}
 
-	public boolean isForceClose()
+	public static boolean isForceClose()
 	{
 		return isForceClose;
+	}
+	
+	public static boolean isApplicationStarted()
+	{
+		return mApplicationStarted;
 	}
 
 	// >>Description
@@ -2645,7 +2678,7 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 	public String								titleUnlockGroup			= "$2.99";
 	public String								titleSubscriptionYear		= "$4.99";
 
-	public String								summary_SKU_PROMO			= "";
+	public String								summary_SKU_PROMO			= "alyrom0nap";
 	// public String summaryUnlockAll = "";
 	// public String summaryUnlockHDR = "";
 	// public String summaryUnlockPano = "";
@@ -3358,7 +3391,7 @@ public class MainScreen extends Activity implements ApplicationInterface, View.O
 		}
 
 		int launchesLeft = MainScreen.thiz.getLeftLaunches(mode.modeID);
-		int id = MainScreen.getAppResources().getIdentifier(mode.modeName, "string", MainScreen.thiz.getPackageName());
+		int id = MainScreen.getAppResources().getIdentifier((CameraController.isUseHALv3()?mode.modeNameHAL:mode.modeName), "string", MainScreen.thiz.getPackageName());
 		String modename = MainScreen.getAppResources().getString(id);
 
 		if (0 == launchesLeft)// no more launches left

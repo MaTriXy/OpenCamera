@@ -31,6 +31,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PointF;
 import android.graphics.Rect;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -213,8 +214,8 @@ public class GroupShotProcessingPlugin implements Handler.Callback, OnClickListe
 		int orientation = MainScreen.getGUIManager().getLayoutOrientation();
 //		Log.d("GroupShot", "onStartProcessing layout orientation: " + orientation);
 		mLayoutOrientationCurrent = (orientation == 0 || orientation == 180) ? orientation : (orientation + 180) % 360;
-		mCameraMirrored = CameraController.isFrontCamera();
-
+		mCameraMirrored = Boolean.valueOf(PluginManager.getInstance().getFromSharedMem("framemirrored1" + sessionID));
+		
 		CameraController.Size imageSize = CameraController.getCameraImageSize();
 
 		int iImageWidth = imageSize.getWidth();
@@ -976,7 +977,7 @@ public class GroupShotProcessingPlugin implements Handler.Callback, OnClickListe
 		if (mDisplayOrientationOnStartProcessing == 0 || mDisplayOrientationOnStartProcessing == 180)
 		{
 			Matrix matrix = new Matrix();
-			matrix.postRotate((mDisplayOrientationOnStartProcessing + 90 % 360));
+			matrix.postRotate(((mDisplayOrientationOnStartProcessing + 90) % 360));
 			PreviewBmp = Bitmap.createBitmap(PreviewBmp, 0, 0, PreviewBmp.getWidth(), PreviewBmp.getHeight(), matrix,
 					true);
 		} else if (!mCameraMirrored && mDisplayOrientationOnStartProcessing == 270)
@@ -1010,7 +1011,10 @@ public class GroupShotProcessingPlugin implements Handler.Callback, OnClickListe
 		PluginManager.getInstance().addToSharedMem("resultframe1" + sessionID, String.valueOf(frame));
 		PluginManager.getInstance().addToSharedMem("resultframelen1" + sessionID, String.valueOf(frame_len));
 
-		PluginManager.getInstance().addToSharedMem("resultframeorientation1" + sessionID, String.valueOf(0));
+		//Nexus 6 has a original front camera sensor orientation, we have to manage it
+		PluginManager.getInstance().addToSharedMem("resultframeorientation1" + sessionID,
+				String.valueOf(((Build.MODEL.contains("Nexus 6") && mCameraMirrored)? 180 : 0)));
+//		PluginManager.getInstance().addToSharedMem("resultframeorientation1" + sessionID, String.valueOf(0));
 		PluginManager.getInstance().addToSharedMem("resultframemirrored1" + sessionID, String.valueOf(mCameraMirrored));
 
 		PluginManager.getInstance().addToSharedMem("amountofresultframes" + sessionID, String.valueOf(1));

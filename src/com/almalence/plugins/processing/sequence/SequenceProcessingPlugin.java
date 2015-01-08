@@ -28,6 +28,7 @@ import android.graphics.DashPathEffect;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.view.Display;
@@ -120,8 +121,9 @@ public class SequenceProcessingPlugin implements Handler.Callback, OnClickListen
 		mDisplayOrientation = Integer.valueOf(PluginManager.getInstance().getFromSharedMem("frameorientation1" + sessionID));
 		int orientation = MainScreen.getGUIManager().getLayoutOrientation();
 		mLayoutOrientationCurrent = (orientation == 0 || orientation == 180) ? orientation : (orientation + 180) % 360;
-		mCameraMirrored = CameraController.isFrontCamera();
-
+		
+		mCameraMirrored = Boolean.valueOf(PluginManager.getInstance().getFromSharedMem("framemirrored1" + sessionID));
+		
 		CameraController.Size imageSize = CameraController.getCameraImageSize();
 		if (mDisplayOrientation == 0 || mDisplayOrientation == 180)
 		{
@@ -282,7 +284,7 @@ public class SequenceProcessingPlugin implements Handler.Callback, OnClickListen
 			Bitmap rotated = Bitmap.createBitmap(PreviewBmp, 0, 0, PreviewBmp.getWidth(), PreviewBmp.getHeight(),
 					matrix, true);
 			mImgView.setImageBitmap(rotated);
-			mImgView.setRotation(CameraController.isFrontCamera() ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 0
+			mImgView.setRotation(mCameraMirrored ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 0
 					: 180)
 					: 0);
 		}
@@ -293,7 +295,7 @@ public class SequenceProcessingPlugin implements Handler.Callback, OnClickListen
 		{
 			Bitmap bmp = thumbnails.get(i);
 			Matrix matrix = new Matrix();
-			matrix.postRotate(CameraController.isFrontCamera() ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 270
+			matrix.postRotate(mCameraMirrored ? ((mDisplayOrientation == 0 || mDisplayOrientation == 180) ? 270
 					: 90)
 					: 90);
 			Bitmap rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.getWidth(), bmp.getHeight(), matrix, true);
@@ -304,7 +306,7 @@ public class SequenceProcessingPlugin implements Handler.Callback, OnClickListen
 		lp.height = thumbnailsArray[0].getHeight();
 		sequenceView.setLayoutParams(lp);
 
-		sequenceView.setRotation(CameraController.isFrontCamera() ? 180 : 0);
+		sequenceView.setRotation(mCameraMirrored? 180 : 0);
 
 		mHandler.sendEmptyMessage(MSG_END_OF_LOADING);
 	}
@@ -387,8 +389,9 @@ public class SequenceProcessingPlugin implements Handler.Callback, OnClickListen
 		PluginManager.getInstance().addToSharedMem("resultframe1" + sessionID, String.valueOf(frame));
 		PluginManager.getInstance().addToSharedMem("resultframelen1" + sessionID, String.valueOf(frame_len));
 
+		//Nexus 6 has a original front camera sensor orientation, we have to manage it
 		PluginManager.getInstance().addToSharedMem("resultframeorientation1" + sessionID,
-				String.valueOf(mDisplayOrientation));
+				String.valueOf((Build.MODEL.contains("Nexus 6") && mCameraMirrored)? (mDisplayOrientation + 180) % 360 : mDisplayOrientation));
 		PluginManager.getInstance().addToSharedMem("resultframemirrored1" + sessionID, String.valueOf(mCameraMirrored));
 
 		PluginManager.getInstance().addToSharedMem("amountofresultframes" + sessionID, String.valueOf(1));
