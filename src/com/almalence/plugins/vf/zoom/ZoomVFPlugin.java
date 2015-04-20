@@ -270,6 +270,7 @@ public class ZoomVFPlugin extends PluginViewfinder
 			zoomBar.setMax(CameraController.getMaxZoom());
 			zoomBar.setProgressAndThumb(0);
 			zoomPanel.setVisibility(View.VISIBLE);
+			CameraController.setZoom(zoomCurrent);
 		} else
 			zoomPanel.setVisibility(View.GONE);
 	}
@@ -435,6 +436,13 @@ public class ZoomVFPlugin extends PluginViewfinder
 			public void onAnimationEnd(Animation animation)
 			{
 				RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) zoomPanel.getLayoutParams();
+				
+				if (params == null)
+				{
+					zoomPanel.clearAnimation();
+					return;
+				}
+
 				params.setMargins(0, 0, 0, 0);
 				zoomPanel.setLayoutParams(params);
 

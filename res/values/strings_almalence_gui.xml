@@ -15,6 +15,7 @@
     <string name="Pref_Common_HWShutter_Title">HW shutter</string>
     <string name="Pref_Common_HWShutter_Summary">Use HW shutter to start application</string>
     <string name="Pref_Common_ShotOnTap_Title">Touch to shoot</string>
+    <string name="Pref_Common_Antibanding_Title">Antibanding</string>
     <string name="Pref_Common_ShotOnTap_Summary">Focus and shoot by tap</string>
     <string name="Pref_Common_UseHALv3_Title">Use Сamera2 interface</string>
     <string name="Pref_Common_UseHALv3_Summary">Experimental mode. Will work on limited number of devices with Android 5</string>    
@@ -91,6 +92,7 @@
     <string name="focusContinuousVideo">Continuous video</string>
     <string name="focusContinuousPicture">Continuous picture</string>
     <string name="focusAFLock">AF lock</string>
+    <string name="focusMF">Manual</string>
     
     <string name="flashAuto">Auto</string>
     <string name="flashOn">On</string>
@@ -176,6 +178,7 @@
     <string name="focusContinuousVideoSystem">continuous-video</string>
     <string name="focusContinuousPictureSystem">continuous-picture</string>
     <string name="focusAfLockSystem">af-lock</string>
+    <string name="focusMFSystem">manual-focus</string>
     
     <string name="focusAutoKey">00_auto</string>
     <string name="focusContinuousVideoKey">01_continuous-video</string>
@@ -186,6 +189,7 @@
     <string name="focusInfinityKey">06_infinity</string>    
     <string name="focusEdofKey">07_edof</string>    
     <string name="focusAfLockKey">08_af-lock</string>
+    <string name="focusMFKey">09_manual-focus</string>
     
     <string name="flashAutoSystem">auto</string>
     <string name="flashOnSystem">on</string>
@@ -236,6 +240,7 @@
     <string name="meteringMatrixSystem">Matrix</string>
     <string name="meteringCenterSystem">Center-weighted</string>
     <string name="meteringSpotSystem">Spot</string>
+    <string name="meteringManualSystem">Manual exposure</string>
     
     <string name="settings_mode_scene">Scene mode</string>
     <string name="settings_mode_wb">White balance</string>
@@ -246,7 +251,10 @@
     <string name="settings_mode_rear">Rear camera</string>
     <string name="settings_mode_front">Front camera</string>
     <string name="settings_mode_exposure">Exposure</string>
+    <string name="settings_mode_exposuretime">Exposure time</string>
+    <string name="settings_mode_focusdistance">Focus distance</string>
     <string name="settings_mode_moresettings">More settings</string>
+    <string name="settings_mode_self_timer">Self-timer</string>
     <string name="settings_mode_aeaflock">AE\\AF Locked</string>
     <string name="settings_mode_aeafunlock">AE\\AF UnLocked</string>
     
@@ -266,6 +274,7 @@
 	<string name="Pref_Advanced_Preference_Summary">Settings for expert users</string>
 	<string name="Pref_Unlock_Preference_Title">Unlock</string>
 	<string name="Pref_Unlock_Preference_Summary">Unlock premium features</string>
+	<string name="Pref_Help_Preference_Title">Help</string>
 	
 	<string name="layout_hint_bottom">Select camera mode</string>
 	<string name="layout_hint_center">Swipe for more/less info</string>

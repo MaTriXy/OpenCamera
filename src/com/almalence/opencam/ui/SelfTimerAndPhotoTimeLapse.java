@@ -27,10 +27,12 @@ package com.almalence.opencam.ui;
 import java.util.ArrayList;
 import java.util.List;
 
+import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnDismissListener;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
@@ -43,6 +45,7 @@ import android.widget.NumberPicker;
 import android.widget.RelativeLayout;
 import android.widget.Switch;
 import android.widget.TextView;
+
 
 import com.almalence.ui.RotateImageView;
 //<!-- -+-
@@ -69,8 +72,8 @@ public class SelfTimerAndPhotoTimeLapse
 	int									timeLapseInterval;
 	int									timeLapseMeasurementVal;
 	String[]							stringTimerInterval			= { "3", "5", "10", "15", "30", "60" };
-	public static String[]				stringTimelapseInterval		= { "3", "5", "10", "15", "30", "60" };
-	String[]							stringTimelapseMeasurement	= { "seconds", "minutes", "hours" };
+	//public static String[]				stringTimelapseInterval		= { "3", "5", "10", "15", "30", "60" };
+	String[]							stringTimelapseMeasurement	= { "seconds", "minutes", "hours", "days" };
 	CheckBox							flashCheckbox;
 	CheckBox							soundCheckbox;
 	NumberPicker						npTimeLapse;
@@ -85,10 +88,13 @@ public class SelfTimerAndPhotoTimeLapse
 
 		npTimer = (NumberPicker) dialog.findViewById(R.id.numberPicker1);
 		npTimer.setDescendantFocusability(NumberPicker.FOCUS_BLOCK_DESCENDANTS);
+		npTimer.setDisplayedValues(stringTimerInterval);
 		npTimer.setMaxValue(5);
 		npTimer.setMinValue(0);
-		npTimer.setValue(interval);
-		npTimer.setDisplayedValues(stringTimerInterval);
+		// Fix for Acer Liquid E2 Duo.
+		if (!Build.MODEL.equals("V370")) {
+			npTimer.setValue(interval);
+		}
 		npTimer.setWrapSelectorWheel(false);
 
 		flashCheckbox = (CheckBox) dialog.findViewById(R.id.flashCheckbox);
@@ -151,25 +157,30 @@ public class SelfTimerAndPhotoTimeLapse
 	public void photoTimeLapseInitDialog()
 	{
 		final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-		timeLapseInterval = prefs.getInt(MainScreen.sPhotoTimeLapseCaptureIntervalPref, 0);
+		timeLapseInterval = prefs.getInt(MainScreen.sPhotoTimeLapseCaptureIntervalPref, 5);
 		timeLapseMeasurementVal = prefs.getInt(MainScreen.sPhotoTimeLapseCaptureIntervalMeasurmentPref, 0);
-
 		swTimeLapseChecked = prefs.getBoolean(MainScreen.sPhotoTimeLapseActivePref, false);
 
 		npTimeLapse = (NumberPicker) dialog.findViewById(R.id.photoTimeLapseInterval_numberPicker);
 		npTimeLapse.setDescendantFocusability(NumberPicker.FOCUS_BLOCK_DESCENDANTS);
-		npTimeLapse.setMaxValue(5);
-		npTimeLapse.setMinValue(0);
-		npTimeLapse.setValue(timeLapseInterval);
-		npTimeLapse.setDisplayedValues(stringTimelapseInterval);
+		//npTimeLapse.setDisplayedValues(stringTimelapseInterval);
+		npTimeLapse.setMaxValue(60);
+		npTimeLapse.setMinValue(1);
+		// Fix for Acer Liquid E2 Duo.
+		if (!Build.MODEL.equals("V370")) {
+			npTimeLapse.setValue(timeLapseInterval);
+		}
 		npTimeLapse.setWrapSelectorWheel(false);
 
 		npTimeLapseMeasurment = (NumberPicker) dialog.findViewById(R.id.photoTimeLapseMeasurment_numberPicker);
 		npTimeLapseMeasurment.setDescendantFocusability(NumberPicker.FOCUS_BLOCK_DESCENDANTS);
-		npTimeLapseMeasurment.setMaxValue(2);
-		npTimeLapseMeasurment.setMinValue(0);
-		npTimeLapseMeasurment.setValue(timeLapseMeasurementVal);
 		npTimeLapseMeasurment.setDisplayedValues(stringTimelapseMeasurement);
+		npTimeLapseMeasurment.setMaxValue(3);
+		npTimeLapseMeasurment.setMinValue(0);
+		// Fix for Acer Liquid E2 Duo.
+		if (!Build.MODEL.equals("V370")) {
+			npTimeLapseMeasurment.setValue(timeLapseMeasurementVal);
+		}
 		npTimeLapseMeasurment.setWrapSelectorWheel(false);
 
 		final Switch sw = (Switch) dialog.findViewById(R.id.photoTimeLapseTitle_switcher);
@@ -242,19 +253,21 @@ public class SelfTimerAndPhotoTimeLapse
 					intervalTimeLapse = 0;
 					intervalTimeLapseMeasurment = 0;
 				}
+				
 				prefsEditor.putBoolean(MainScreen.sPhotoTimeLapseActivePref, swTimeLapseChecked);
 				prefsEditor.putInt(MainScreen.sPhotoTimeLapseCaptureIntervalPref, intervalTimeLapse);
 				prefsEditor
 						.putInt(MainScreen.sPhotoTimeLapseCaptureIntervalMeasurmentPref, intervalTimeLapseMeasurment);
 
+				
 				// timer
 				int intervalTimer = 0;
-
 				if (swTimerChecked)
-					intervalTimeLapse = npTimer.getValue();
+					intervalTimer = npTimer.getValue();
 				else
-					intervalTimeLapse = 0;
-				int real_int = Integer.parseInt(stringTimerInterval[npTimer.getValue()]);
+					intervalTimer = 0;
+				
+				int real_int = Integer.parseInt(stringTimerInterval[intervalTimer]);
 				prefsEditor.putBoolean(MainScreen.sSWCheckedPref, swTimerChecked);
 				if (swTimerChecked)
 					prefsEditor.putInt(MainScreen.sDelayedCapturePref, real_int);
@@ -265,7 +278,7 @@ public class SelfTimerAndPhotoTimeLapse
 				}
 				prefsEditor.putBoolean(MainScreen.sDelayedFlashPref, flashCheckbox.isChecked());
 				prefsEditor.putBoolean(MainScreen.sDelayedSoundPref, soundCheckbox.isChecked());
-				prefsEditor.putInt(MainScreen.sDelayedCaptureIntervalPref, intervalTimeLapse);
+				prefsEditor.putInt(MainScreen.sDelayedCaptureIntervalPref, intervalTimer);
 
 				prefsEditor.commit();
 
@@ -354,66 +367,79 @@ public class SelfTimerAndPhotoTimeLapse
 		boolean photoTimeLapseActive = prefs.getBoolean(MainScreen.sPhotoTimeLapseActivePref, false);
 		boolean photoTimeLapseIsRunning = prefs.getBoolean(MainScreen.sPhotoTimeLapseIsRunningPref, false);
 
-		if (photoTimeLapseActive && photoTimeLapseIsRunning) {
-			timeLapseCount.setVisibility(View.VISIBLE);
-			int count = prefs.getInt(MainScreen.sPhotoTimeLapseCount, 0);
-			timeLapseCount.setText(String.valueOf(count));
-			timeLapseButton.setVisibility(View.GONE);
-		} else {
-			timeLapseCount.setText(String.valueOf(0));
-			timeLapseCount.setVisibility(View.GONE);
-			timeLapseButton.setVisibility(View.VISIBLE);
+		if ((timeLapseCount != null) && (timeLapseButton != null))
+		{
+			if (photoTimeLapseActive && photoTimeLapseIsRunning) {
+				timeLapseCount.setVisibility(View.VISIBLE);
+				int count = prefs.getInt(MainScreen.sPhotoTimeLapseCount, 0);
+				timeLapseCount.setText(String.valueOf(count));
+				timeLapseButton.setVisibility(View.GONE);
+			} else {
+				timeLapseCount.setText(String.valueOf(0));
+				timeLapseCount.setVisibility(View.GONE);
+				timeLapseButton.setVisibility(View.VISIBLE);
+			}
 		}
 	}
 
 	private void updateTimelapseButton(int delayInterval)
 	{
-		switch (delayInterval)
-		{
-		case 0:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer_control);
-			break;
-		case 3:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer3_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer3_control);
-			break;
-		case 5:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer5_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer5_control);
-			break;
-		case 10:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer10_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer10_control);
-			break;
-		case 15:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer15_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer15_control);
-			break;
-		case 30:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer30_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer30_control);
-			break;
-		case 60:
-			if (swTimerChecked)
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer60_controlcative);
-			else
-				timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer60_control);
-			break;
-		default:
-			break;
+		if (timeLapseButton == null)
+			return;
+		
+		timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer_control);
+		
+		if (swTimeLapseChecked)
+			timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer_controlcative);
+		else if (swTimerChecked)
+		{					
+			switch (delayInterval)
+			{
+			case 0:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer_control);
+				break;
+			case 3:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer3_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer3_control);
+				break;
+			case 5:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer5_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer5_control);
+				break;
+			case 10:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer10_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer10_control);
+				break;
+			case 15:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer15_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer15_control);
+				break;
+			case 30:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer30_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer30_control);
+				break;
+			case 60:
+				if (swTimerChecked)
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer60_controlcative);
+				else
+					timeLapseButton.setImageResource(R.drawable.gui_almalence_mode_selftimer60_control);
+				break;
+			default:
+				break;
+			}
 		}
 	}
 

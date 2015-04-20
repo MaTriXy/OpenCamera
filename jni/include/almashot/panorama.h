@@ -31,7 +31,7 @@
  SPECIAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE USE, MISUSE OR
  INABILITY TO USE THE SOFTWARE OR RELATED DOCUMENTATION.
 
- COPYRIGHT 2010-2012, ALMALENCE, INC.
+ COPYRIGHT 2010-2014, ALMALENCE, INC.
 
  ---------------------------------------------------------------------------
 
@@ -119,10 +119,11 @@ int Pano_Preview
 	int   SensorGain,
 	int   ctrstPref,
 	int   microPref,
-   	int   *fx0,
-   	int   *fy0,
-   	int   *fsx,
-   	int   *fsy,
+	float overlap,
+	int   *fx0,
+	int   *fy0,
+	int   *fsx,
+	int   *fsy,
 	int   sx,
 	int   sy,
 	int   nFrames,

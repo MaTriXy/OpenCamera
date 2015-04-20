@@ -42,6 +42,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.CountDownTimer;
+import android.os.Handler;
 import android.os.Message;
 import android.preference.Preference;
 import android.preference.Preference.OnPreferenceChangeListener;
@@ -103,6 +104,8 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 	private final static List<Point>	ResolutionsPictureSizesList		= new ArrayList<Point>();
 	
 	private static boolean takingAlready = false;
+	
+	private boolean	camera2Preference;
 
 	public static List<Point> getResolutionspicturesizeslist()
 	{
@@ -469,6 +472,22 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 	{
 		setMode();
 	}
+	
+	@Override
+	public void onStart()
+	{
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
+		camera2Preference = prefs.getBoolean(MainScreen.getMainContext().getResources().getString(R.string.Preference_UseHALv3Key), false);
+		
+		if(Build.MODEL.equals("Nexus 6") && camera2Preference)
+		{
+			prefs.edit().putBoolean(MainScreen.getMainContext().getResources().getString(R.string.Preference_UseHALv3Key), false).commit();
+			CameraController.useHALv3(false);
+			
+			CameraController.isOldCameraOneModeLaunched = true;
+			PluginManager.getInstance().setSwitchModeType(true);
+		}
+	}
 
 	@Override
 	public void onResume()
@@ -507,6 +526,10 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 				CameraController.setCameraParameters(cp);
 			}
 		}
+		
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
+
+		prefs.edit().putBoolean(MainScreen.getMainContext().getResources().getString(R.string.Preference_UseHALv3Key), camera2Preference).commit();
 	}
 
 	@Override
@@ -546,6 +569,12 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 	public void onStop()
 	{
 		MainScreen.getGUIManager().removeViews(modeSwitcher, R.id.specialPluginsLayout3);
+		
+		if(Build.MODEL.equals("Nexus 6") && camera2Preference)
+		{
+			CameraController.needCameraRelaunch(true);
+			CameraController.useHALv3(camera2Preference);
+		}
 	}
 
 	@Override
@@ -558,7 +587,7 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 	@Override
 	public void onGUICreate()
 	{
-		MainScreen.getInstance().disableCameraParameter(CameraParameter.CAMERA_PARAMETER_SCENE, true, false);
+		MainScreen.getInstance().disableCameraParameter(CameraParameter.CAMERA_PARAMETER_SCENE, true, false, true);
 
 		this.clearViews();
 
@@ -585,7 +614,19 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 		this.init();
 
 		final List<CameraController.Size> cs = CameraController.getSupportedPictureSizes();
-		final CameraController.Size size = cs.get(PanoramaAugmentedCapturePlugin.prefResolution);
+		final CameraController.Size size;
+		
+		// Paranoia check. In some unusual cases prefResolution value may be more then cs.size.
+		if (PanoramaAugmentedCapturePlugin.prefResolution >= cs.size()) {
+			int prefResolution = PanoramaAugmentedCapturePlugin.prefResolution;
+			while (prefResolution >= cs.size()) {
+				prefResolution--;
+			}
+			
+			size = cs.get(prefResolution);
+		} else {
+			size = cs.get(PanoramaAugmentedCapturePlugin.prefResolution);
+		}
 		
 		if (Build.MODEL.contains("HTC One X"))
 		{
@@ -771,7 +812,8 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 		if (!takingAlready
 				&& (fs == CameraController.FOCUS_STATE_IDLE || fs == CameraController.FOCUS_STATE_FOCUSING)
 				&& !(fm == CameraParameters.AF_MODE_INFINITY || fm == CameraParameters.AF_MODE_FIXED
-						|| fm == CameraParameters.AF_MODE_EDOF || fm == CameraParameters.AF_MODE_CONTINUOUS_PICTURE || fm == CameraParameters.AF_MODE_CONTINUOUS_VIDEO)
+						|| fm == CameraParameters.AF_MODE_EDOF || fm == CameraParameters.AF_MODE_CONTINUOUS_PICTURE || fm == CameraParameters.AF_MODE_CONTINUOUS_VIDEO
+						|| fm == CameraParameters.MF_MODE)
 				&& !MainScreen.getAutoFocusLock())
 		{
 			// aboutToTakePicture = true;
@@ -805,44 +847,7 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 	@Override
 	public boolean onBroadcast(final int command, final int arg)
 	{
-		if (command == PluginManager.MSG_NEXT_FRAME)
-		{
-			this.previewRestartFlag = true;
-
-			CameraController.startCameraPreview();
-
-			// initSensors(); // attempt to fix LG G2 accelerometer slowdown
-
-			new CountDownTimer(1000, 330)
-			{
-				private boolean	first	= true;
-
-				public void onTick(final long millisUntilFinished)
-				{
-					if (this.first)
-					{
-						this.first = false;
-						return;
-					}
-
-					if (PanoramaAugmentedCapturePlugin.this.previewRestartFlag)
-					{
-						Log.d("Almalence", String.format("Emergency preview restart"));
-						CameraController.setPreviewCallbackWithBuffer();
-					} else
-					{
-						this.cancel();
-					}
-				}
-
-				public void onFinish()
-				{
-
-				}
-			}.start();
-
-			return true;
-		} else if (command == PluginManager.MSG_FORCE_FINISH_CAPTURE)
+		if (command == PluginManager.MSG_FORCE_FINISH_CAPTURE)
 		{
 			this.stopCapture();
 
@@ -878,7 +883,7 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 	private void getPrefs()
 	{
 		final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-		this.modeSweep = prefs.getBoolean(sModePref, true);
+		this.modeSweep = prefs.getBoolean(sModePref, false);
 
 		try
 		{
@@ -1136,7 +1141,7 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 			} else
 			{
 				this.takingAlready = true;
-				MainScreen.getMessageHandler().sendEmptyMessage(PluginManager.MSG_TAKE_PICTURE);
+				MainScreen.takePicture();
 			}
 		}
 	}
@@ -1166,8 +1171,8 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 		{
 			if (!this.takingAlready && this.glContextCreated)
 			{
-				final int state = this.engine.getPictureTakingState(this.modeSweep ? true : CameraController
-						.getInstance().getFocusMode() == CameraParameters.AF_MODE_AUTO);
+				final int state = this.engine.getPictureTakingState(this.modeSweep ? true : 
+									CameraController.getFocusMode() == CameraParameters.AF_MODE_AUTO);
 
 				if (state == AugmentedPanoramaEngine.STATE_TAKINGPICTURE || this.isFirstFrame)
 				{
@@ -1191,6 +1196,16 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 		// startCapture();
 	}
 
+	private Handler captureDelayHandler = new Handler();
+	private Runnable captureDelayRunnable = new Runnable()
+	{
+		@Override
+		public void run()
+		{
+			CameraController.captureImagesWithParams(1, CameraController.YUV, null, null, null, null, false, true);
+			
+		}
+	};
 	@Override
 	public void takePicture()
 	{
@@ -1209,7 +1224,7 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 		this.coordsRecorded = false;
 		
 		// Log.d(TAG, "Perform CAPTURE Panorama");
-		CameraController.captureImagesWithParams(1, CameraController.YUV, null, null, null, null, false, true);
+		captureDelayHandler.postDelayed(captureDelayRunnable, 500);
 	}
 
 	private void lockAEWB()
@@ -1347,7 +1362,7 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 			PluginManager.getInstance()
 					.sendMessage(PluginManager.MSG_BROADCAST, PluginManager.MSG_NOTIFY_LIMIT_REACHED);
 
-		PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, PluginManager.MSG_NEXT_FRAME);
+		nextFrame();
 
 		if (!goodPlace)
 			PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, PluginManager.MSG_BAD_FRAME);
@@ -1370,6 +1385,44 @@ public class PanoramaAugmentedCapturePlugin extends PluginCapture // implements
 				this.isFirstFrame = false;
 			}
 		}
+	}
+	
+	
+	private void nextFrame()
+	{
+		this.previewRestartFlag = true;
+
+		CameraController.startCameraPreview();
+
+		// initSensors(); // attempt to fix LG G2 accelerometer slowdown
+
+		new CountDownTimer(1000, 330)
+		{
+			private boolean	first	= true;
+
+			public void onTick(final long millisUntilFinished)
+			{
+				if (this.first)
+				{
+					this.first = false;
+					return;
+				}
+
+				if (PanoramaAugmentedCapturePlugin.this.previewRestartFlag)
+				{
+					Log.d("Almalence", String.format("Emergency preview restart"));
+					CameraController.setPreviewCallbackWithBuffer();
+				} else
+				{
+					this.cancel();
+				}
+			}
+
+			public void onFinish()
+			{
+
+			}
+		}.start();
 	}
 
 	@SuppressLint("FloatMath")
