@@ -4,15 +4,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	  package="com.almalence.opencam_plus"
       android:installLocation="auto"
-      android:versionCode="76"
-      android:versionName="3.33">
+      android:versionCode="111"
+      android:versionName="3.51">
 +++ -->
 <!-- -+-  -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 	  package="com.almalence.opencam"
       android:installLocation="auto"
-      android:versionCode="98"
-      android:versionName="3.33">
+      android:versionCode="144"
+      android:versionName="3.51">
 <!--  -+- -->
 
     <supports-screens       
@@ -29,11 +29,15 @@
  	<uses-feature android:glEsVersion="0x00020000" />
 	<uses-permission android:name="android.permission.WAKE_LOCK" />
 	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 	<uses-permission android:name="android.permission.RECORD_AUDIO" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 	<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 	<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-	<uses-permission android:name="android.permission.WRITE_SETTINGS" />
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 <!-- -+-  -->
 	<uses-permission android:name="com.android.vending.BILLING"/>
 	<uses-permission android:name="org.onepf.openiab.permission.BILLING"/>
@@ -45,13 +49,14 @@
 		<!-- +++
    		<activity android:name="com.almalence.opencam_plus.MainScreen"
                   android:label="@string/app_name"
-                  android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen"
+                  android:theme="@style/AlmalenceOpenCameraTheme"
                   android:screenOrientation="portrait">
 		+++ -->
 		<!-- -+-  -->
 		<activity android:name="com.almalence.opencam.MainScreen"
                   android:label="@string/app_name"
-                  android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen"
+                  android:launchMode="singleInstance"
+                  android:theme="@style/AlmalenceOpenCameraTheme"
                   android:screenOrientation="portrait">
 		<!--  -+- -->
                     
@@ -123,6 +128,23 @@
 		<receiver android:name="com.almalence.opencam.AlarmReceiver"></receiver>
 		<!--  -+- -->
 
+		<!-- +++
+		<service
+            android:name="com.almalence.opencam_plus.ProcessingService"
+            android:exported="false"/>
+		<service
+            android:name="com.almalence.opencam_plus.SavingService"
+            android:exported="false"/>
+		+++ -->
+		<!-- -+-  -->
+		<service
+            android:name="com.almalence.opencam.ProcessingService"
+            android:exported="false"/>
+		<service
+            android:name="com.almalence.opencam.SavingService"
+            android:exported="false"/>
+		<!--  -+- -->
+
 		<!-- Uncomment for Amazon market 1st part 
 		<receiver android:name="com.amazon.inapp.purchasing.ResponseReceiver">
 	    	<intent-filter>
@@ -133,6 +155,67 @@
 		    </intent-filter>
 		</receiver>
 		-->
+		
+		<activity android:name="com.almalence.widget.OpenCameraWidgetConfigureActivity"
+   	    		  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen">
+    		<intent-filter>
+        		<action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+    		</intent-filter>
+		</activity>
+		
+		<activity android:name="com.almalence.widget.OpenCameraSolidWidgetConfigureActivity"
+   	    		  android:label="@string/app_name"
+                  android:theme="@android:style/Theme.Holo.NoActionBar.Fullscreen">
+    		<intent-filter>
+        		<action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+    		</intent-filter>
+		</activity>
+		
+		
+		<!-- WIDGET PROVIDERS -->
+		<receiver android:name="com.almalence.widget.OpenCameraWidgetProvider"
+		    	  android:label="@string/widgetName" >
+    		<intent-filter>
+        		<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        		<action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED"/>        		
+    		</intent-filter>
+    	<meta-data android:name="android.appwidget.provider"
+               android:resource="@xml/opencamera_appwidget_info" />
+		</receiver>
+		
+		<receiver android:name="com.almalence.widget.OpenCameraSolidWidgetProvider"
+		    	  android:label="@string/widgetSolidName">
+    		<intent-filter>
+        		<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        		<action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED"/>        		
+    		</intent-filter>
+    	<meta-data android:name="android.appwidget.provider"
+               android:resource="@xml/opencamera_appsolidwidget_info" />
+		</receiver>
+		
+		<receiver android:name="com.almalence.widget.OpenCameraFullSolidWidgetProvider"
+		    	  android:label="@string/widgetFullSolidName">
+    		<intent-filter>
+        		<action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        		<action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED"/>        		
+    		</intent-filter>
+    	<meta-data android:name="android.appwidget.provider"
+               android:resource="@xml/opencamera_appfullsolidwidget_info" />
+		</receiver>
+		
+		<!-- WIDGET SERVICES -->		
+		<service android:name="com.almalence.widget.OpenCameraWidgetService"
+        android:permission="android.permission.BIND_REMOTEVIEWS"
+        android:exported="false" />
+		
+		<service android:name="com.almalence.widget.OpenCameraSolidWidgetService"
+        android:permission="android.permission.BIND_REMOTEVIEWS"
+        android:exported="false" />
+		
+		<service android:name="com.almalence.widget.OpenCameraFullSolidWidgetService"
+        android:permission="android.permission.BIND_REMOTEVIEWS"
+        android:exported="false" />	
 		 
  </application>
 
@@ -142,5 +225,5 @@
 	-->
 
 	<uses-sdk 	android:minSdkVersion="14"
-	    		android:targetSdkVersion="21"/>
+	    		android:targetSdkVersion="24"/>
 </manifest> 

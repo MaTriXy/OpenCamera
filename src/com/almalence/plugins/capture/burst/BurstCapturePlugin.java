@@ -18,26 +18,28 @@ by Almalence Inc. All Rights Reserved.
 
 package com.almalence.plugins.capture.burst;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map.Entry;
 
 import android.annotation.TargetApi;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
-import android.graphics.ImageFormat;
-import android.hardware.Camera;
 import android.hardware.camera2.CaptureResult;
-import android.media.Image;
-import android.os.CountDownTimer;
-import android.os.Message;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.view.Gravity;
+import android.widget.LinearLayout;
+import android.widget.Toast;
 
 /* <!-- +++
  import com.almalence.opencam_plus.cameracontroller.CameraController;
  import com.almalence.opencam_plus.ui.GUI.CameraParameter;
  import com.almalence.opencam_plus.CameraParameters;
- import com.almalence.opencam_plus.MainScreen;
+ import com.almalence.opencam_plus.ApplicationScreen;
+ import com.almalence.opencam_plus.ApplicationInterface;
  import com.almalence.opencam_plus.PluginCapture;
  import com.almalence.opencam_plus.PluginManager;
  import com.almalence.opencam_plus.R;
@@ -45,15 +47,15 @@ import android.util.Log;
 // <!-- -+-
 import com.almalence.opencam.cameracontroller.CameraController;
 import com.almalence.opencam.ui.GUI.CameraParameter;
+import com.almalence.opencam.ApplicationInterface;
 import com.almalence.opencam.CameraParameters;
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.PluginCapture;
 import com.almalence.opencam.PluginManager;
 import com.almalence.opencam.R;
 //-+- -->
+import com.almalence.util.HeapUtil;
 
-import com.almalence.SwapHeap;
-import com.almalence.YuvImage;
 
 /***
  * Implements burst capture plugin - captures predefined number of images
@@ -68,6 +70,20 @@ public class BurstCapturePlugin extends PluginCapture
 
 	private static String	sImagesAmountPref;
 	private static String	sPauseBetweenShotsPref;
+	
+	private static Toast	capturingDialog;
+	
+	//That map helps to find suitable amount of RAW frames to be captured in case of low memory
+	protected static final LinkedHashMap<Integer, Integer> IMAGE_AMOUNT_VALUES		= new LinkedHashMap<Integer, Integer>()
+	{
+		{
+			put(0, 20);
+			put(1, 15);
+			put(2, 10);
+			put(3, 5);
+			put(4, 3);
+		}
+	};
 
 	public BurstCapturePlugin()
 	{
@@ -78,8 +94,8 @@ public class BurstCapturePlugin extends PluginCapture
 	@Override
 	public void onCreate()
 	{
-		sImagesAmountPref = MainScreen.getAppResources().getString(R.string.Preference_BurstImagesAmount);
-		sPauseBetweenShotsPref = MainScreen.getAppResources().getString(R.string.Preference_BurstPauseBetweenShots);
+		sImagesAmountPref = ApplicationScreen.getAppResources().getString(R.string.Preference_BurstImagesAmount);
+		sPauseBetweenShotsPref = ApplicationScreen.getAppResources().getString(R.string.Preference_BurstPauseBetweenShots);
 	}
 
 	@Override
@@ -95,61 +111,76 @@ public class BurstCapturePlugin extends PluginCapture
 		imagesTakenRAW = 0;
 		inCapture = false;
 		aboutToTakePicture = false;
+		
+		isAllImagesTaken = false;
+		isAllCaptureResultsCompleted = true;
 
-		if (CameraController.isUseHALv3() && CameraController.isNexus())
+		if (CameraController.isUseCamera2() && CameraController.isNexus5or6)
 		{
-			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-			preferenceFlashMode = prefs.getInt(MainScreen.sFlashModePref, MainScreen.sDefaultFlashValue);
+			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
+			preferenceFlashMode = prefs.getInt(ApplicationScreen.sFlashModePref, ApplicationScreen.sDefaultFlashValue);
 			
 			SharedPreferences.Editor editor = prefs.edit();
-			editor.putInt(MainScreen.sFlashModePref, CameraParameters.FLASH_MODE_OFF);
+			editor.putInt(ApplicationScreen.sFlashModePref, CameraParameters.FLASH_MODE_OFF);
 			editor.commit();
 		}
 
 		// refreshPreferences();
-		if (captureRAW)
-			MainScreen.setCaptureFormat(CameraController.RAW);
+		if(captureRAW && CameraController.isRAWCaptureSupported())
+			ApplicationScreen.setCaptureFormat(CameraController.RAW);
 		else
-			MainScreen.setCaptureFormat(CameraController.JPEG);
+		{
+			captureRAW = false;
+			ApplicationScreen.setCaptureFormat(CameraController.JPEG);
+		}
 	}
 
 	@Override
 	public void onGUICreate()
 	{
-		if (CameraController.isUseHALv3() && CameraController.isNexus())
-		{
-			MainScreen.getInstance().disableCameraParameter(CameraParameter.CAMERA_PARAMETER_FLASH, true, false, true);
-		}
+		if (CameraController.isUseCamera2() && CameraController.isNexus5or6)
+			ApplicationScreen.instance.disableCameraParameter(CameraParameter.CAMERA_PARAMETER_FLASH, true, false, true);
 	}
 
 	@Override
 	public void setupCameraParameters()
 	{
+		//Warn user if current free memory level is not enough to capture all RAW frames
+		//in case of RAW capturing enabled, for other capture formats amount of memory is enough by default
+		if(!checkFreeMemory(imageAmount))
+		{
+			LinearLayout bottom_layout = (LinearLayout) ApplicationScreen.instance.findViewById(R.id.mainButtons);
+
+			capturingDialog = Toast.makeText(ApplicationScreen.instance, R.string.not_enough_memory_for_capture, Toast.LENGTH_LONG);
+			capturingDialog.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, bottom_layout.getHeight());
+			capturingDialog.show();
+		}
+		
 		try
 		{
 			int[] flashModes = CameraController.getSupportedFlashModes();
-			if (flashModes != null && flashModes.length > 0 && CameraController.isUseHALv3()
-					&& CameraController.isNexus())
+			if (flashModes != null && flashModes.length > 0 && CameraController.isUseCamera2()
+					&& CameraController.isNexus5or6)
 			{
 				CameraController.setCameraFlashMode(CameraParameters.FLASH_MODE_OFF);
 
-				SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
+				SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
 				SharedPreferences.Editor editor = prefs.edit();
-				editor.putInt(MainScreen.sFlashModePref, CameraParameters.FLASH_MODE_OFF);
+				editor.putInt(ApplicationScreen.sFlashModePref, CameraParameters.FLASH_MODE_OFF);
 				editor.commit();
 			}
 		} catch (RuntimeException e)
 		{
-			Log.e("CameraTest", "MainScreen.setupCamera unable to setFlashMode");
+			Log.e("Burst capture", "ApplicationScreen.setupCamera unable to setFlashMode");
 		}
 	}
 
 	@Override
 	public void onPause()
 	{
-		if (CameraController.isUseHALv3() && CameraController.isNexus()) {
-			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-			prefs.edit().putInt(MainScreen.sFlashModePref, preferenceFlashMode).commit();
+		if (CameraController.isUseCamera2() && CameraController.isNexus5or6) {
+			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
+			prefs.edit().putInt(ApplicationScreen.sFlashModePref, preferenceFlashMode).commit();
 			CameraController.setCameraFlashMode(preferenceFlashMode);
 		}
 	}
@@ -158,11 +189,10 @@ public class BurstCapturePlugin extends PluginCapture
 	{
 		try
 		{
-			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
+			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
 			imageAmount = Integer.parseInt(prefs.getString(sImagesAmountPref, "3"));
 			pauseBetweenShots = Integer.parseInt(prefs.getString(sPauseBetweenShotsPref, "0"));
-			captureRAW = (prefs.getBoolean(MainScreen.sCaptureRAWPref, false) && CameraController
-					.isRAWCaptureSupported());
+			captureRAW = prefs.getBoolean(ApplicationScreen.sCaptureRAWPref, false);
 		} catch (Exception e)
 		{
 			Log.e("Burst capture", "Cought exception " + e.getMessage());
@@ -193,7 +223,7 @@ public class BurstCapturePlugin extends PluginCapture
 	@Override
 	public void onQuickControlClick()
 	{
-		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
 		int val = Integer.parseInt(prefs.getString(sImagesAmountPref, "1"));
 		int selected = 0;
 		switch (val)
@@ -224,27 +254,43 @@ public class BurstCapturePlugin extends PluginCapture
 		case 0:
 			quickControlIconID = R.drawable.gui_almalence_mode_burst3;
 			editor.putString("burstImagesAmount", "3");
+			imageAmount = 3;
 			break;
 		case 1:
 			quickControlIconID = R.drawable.gui_almalence_mode_burst5;
 			editor.putString("burstImagesAmount", "5");
+			imageAmount = 5;
 			break;
 		case 2:
 			quickControlIconID = R.drawable.gui_almalence_mode_burst10;
 			editor.putString("burstImagesAmount", "10");
+			imageAmount = 10;
 			break;
 		case 3:
 			quickControlIconID = R.drawable.gui_almalence_mode_burst15;
 			editor.putString("burstImagesAmount", "15");
+			imageAmount = 15;
 			break;
 		case 4:
 			quickControlIconID = R.drawable.gui_almalence_mode_burst20;
 			editor.putString("burstImagesAmount", "20");
+			imageAmount = 20;
 			break;
 		default:
 			break;
 		}
 		editor.commit();
+		
+		//Warn user if current free memory level is not enough to capture all RAW frames
+		//in case of RAW capturing enabled, for other capture formats amount of memory is enough by default
+		if(!checkFreeMemory(imageAmount))
+		{
+			LinearLayout bottom_layout = (LinearLayout) ApplicationScreen.instance.findViewById(R.id.mainButtons);
+
+			capturingDialog = Toast.makeText(ApplicationScreen.instance, R.string.not_enough_memory_for_capture, Toast.LENGTH_LONG);
+			capturingDialog.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, bottom_layout.getHeight());
+			capturingDialog.show();
+		}
 	}
 
 	public boolean delayedCaptureSupported()
@@ -258,15 +304,67 @@ public class BurstCapturePlugin extends PluginCapture
 		inCapture = true;
 		resultCompleted = 0;
 
-		int[] pause = new int[imageAmount];
-		Arrays.fill(pause, pauseBetweenShots);
 		if (captureRAW)
 		{
-			CameraController.captureImagesWithParams(imageAmount, CameraController.RAW, pause, null, null, null, true,
-					true);
-		} else
-			CameraController.captureImagesWithParams(imageAmount, CameraController.JPEG, pause, null, null, null, true,
-					true);
+			//Some device (such as LG G Flex 2 has a bad memory management.)
+			//As a result on such devices is impossible to capture all set of amount of RAW frames.
+			//To prevent crash we used 'reduced amount of frames' logic:
+			//Checking one by one RAW frames amount starting from initial imageAmount to suit current free memory
+			//If current RAW amount can't be captured we try to capture less images.
+			//If we can't capture even 3 RAW picture we capture only JPEG frames but initial amount.
+			
+			//Find index of current imageAmount in helper's map
+			int idx = IMAGE_AMOUNT_VALUES.size();
+			for (Entry<Integer, Integer> entry : IMAGE_AMOUNT_VALUES.entrySet())
+			{
+		        if (imageAmount == entry.getValue())
+		        {
+		            idx =  entry.getKey();
+		            break;
+		        }
+			}
+			
+			//Iterate trough image amount map. Values is reduced on each step
+			for(int i = idx; i < IMAGE_AMOUNT_VALUES.size(); i++)
+			{
+				int imageAmountChecked = IMAGE_AMOUNT_VALUES.get(i);
+				if(checkFreeMemory(imageAmountChecked))
+				{
+					//Checked image amount is suitable for current memory level
+					
+					//If checked image amount is less than initial then warn user about that and change initial image amount to suitable amount
+					if(imageAmount > imageAmountChecked)
+					{
+						LinearLayout bottom_layout = (LinearLayout) ApplicationScreen.instance.findViewById(R.id.mainButtons);
+
+						capturingDialog = Toast.makeText(ApplicationScreen.instance, R.string.capture_less_raw, Toast.LENGTH_LONG);
+						capturingDialog.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, bottom_layout.getHeight());
+						capturingDialog.show();
+						
+						imageAmount = imageAmountChecked;
+					}
+					
+					final int[] pause = new int[imageAmount];
+					Arrays.fill(pause, pauseBetweenShots);
+					createRequestIDList(imageAmount * 2);
+					CameraController.captureImagesWithParams(imageAmount, CameraController.RAW, pause, null, null, null, false, true,
+							true);
+					return;
+				}
+			}
+			//If no one RAW frame can be captured, capture JPEG frames.
+			LinearLayout bottom_layout = (LinearLayout) ApplicationScreen.instance.findViewById(R.id.mainButtons);
+
+			capturingDialog = Toast.makeText(ApplicationScreen.instance, R.string.capture_only_jpeg, Toast.LENGTH_LONG);
+			capturingDialog.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, bottom_layout.getHeight());
+			capturingDialog.show();
+		}
+		
+		final int[] pause = new int[imageAmount];
+		Arrays.fill(pause, pauseBetweenShots);
+		createRequestIDList(imageAmount);
+		CameraController.captureImagesWithParams(imageAmount, CameraController.JPEG, pause, null, null, null, false, true,
+				true);
 	}
 
 	@Override
@@ -275,12 +373,15 @@ public class BurstCapturePlugin extends PluginCapture
 		if (frame == 0)
 		{
 			Log.d("Burst", "Load to heap failed");
-			PluginManager.getInstance().sendMessage(PluginManager.MSG_CAPTURE_FINISHED, String.valueOf(SessionID));
 
 			imagesTaken = 0;
 			imagesTakenRAW = 0;
 			resultCompleted = 0;
-			MainScreen.getInstance().muteShutter(false);
+			isAllImagesTaken = false;
+			inCapture = false;
+			ApplicationScreen.instance.muteShutter(false);
+			
+			PluginManager.getInstance().sendMessage(ApplicationInterface.MSG_CAPTURE_FINISHED_NORESULT, String.valueOf(SessionID));
 			return;
 		}
 
@@ -295,7 +396,7 @@ public class BurstCapturePlugin extends PluginCapture
 		PluginManager.getInstance().addToSharedMem("frameisraw" + imagesTaken + SessionID, String.valueOf(isRAW));
 
 		PluginManager.getInstance().addToSharedMem("frameorientation" + imagesTaken + SessionID,
-				String.valueOf(MainScreen.getGUIManager().getDisplayOrientation()));
+				String.valueOf(ApplicationScreen.getGUIManager().getImageDataOrientation()));
 		PluginManager.getInstance().addToSharedMem("framemirrored" + imagesTaken + SessionID,
 				String.valueOf(CameraController.isFrontCamera()));
 
@@ -305,37 +406,44 @@ public class BurstCapturePlugin extends PluginCapture
 		} catch (RuntimeException e)
 		{
 			Log.e("Burst", "StartPreview fail");
-			PluginManager.getInstance().sendMessage(PluginManager.MSG_CAPTURE_FINISHED, String.valueOf(SessionID));
+			PluginManager.getInstance().sendMessage(ApplicationInterface.MSG_CAPTURE_FINISHED, String.valueOf(SessionID));
 
 			imagesTaken = 0;
 			imagesTakenRAW = 0;
 			resultCompleted = 0;
-			MainScreen.getInstance().muteShutter(false);
+			ApplicationScreen.instance.muteShutter(false);
 			return;
 		}
 
 		if ((captureRAW && imagesTaken >= (imageAmount * 2)) || (!captureRAW && imagesTaken >= imageAmount))
 		{
-			PluginManager.getInstance().addToSharedMem("amountofcapturedframes" + SessionID,
-					String.valueOf(imagesTaken));
-			PluginManager.getInstance().addToSharedMem("amountofcapturedrawframes" + SessionID,
-					String.valueOf(imagesTakenRAW));
-
-			PluginManager.getInstance().sendMessage(PluginManager.MSG_CAPTURE_FINISHED, String.valueOf(SessionID));
-
-			imagesTaken = 0;
-			imagesTakenRAW = 0;
-			resultCompleted = 0;
-
-			inCapture = false;
+			if(isAllCaptureResultsCompleted)
+			{
+				PluginManager.getInstance().addToSharedMem("amountofcapturedframes" + SessionID,
+						String.valueOf(imagesTaken));
+				PluginManager.getInstance().addToSharedMem("amountofcapturedrawframes" + SessionID,
+						String.valueOf(imagesTakenRAW));
+	
+				PluginManager.getInstance().sendMessage(ApplicationInterface.MSG_CAPTURE_FINISHED, String.valueOf(SessionID));
+	
+				imagesTaken = 0;
+				imagesTakenRAW = 0;
+				resultCompleted = 0;
+				inCapture = false;
+				
+				isAllImagesTaken = false;
+			}
+			else
+				isAllImagesTaken = true;
 		}
-
 	}
 
 	@TargetApi(21)
 	@Override
 	public void onCaptureCompleted(CaptureResult result)
 	{
+		isAllCaptureResultsCompleted = false;
+		
 		int requestID = requestIDArray[resultCompleted];
 		resultCompleted++;
 		if (result.getSequenceId() == requestID)
@@ -346,10 +454,48 @@ public class BurstCapturePlugin extends PluginCapture
 		if (captureRAW)
 			PluginManager.getInstance().addRAWCaptureResultToSharedMem("captureResult" + resultCompleted + SessionID,
 					result);
+		
+		if ((captureRAW && resultCompleted >= (imageAmount * 2)) || (!captureRAW && resultCompleted >= imageAmount))
+		{
+			isAllCaptureResultsCompleted = true;
+			
+			if(isAllImagesTaken)
+			{
+				PluginManager.getInstance().addToSharedMem("amountofcapturedframes" + SessionID,
+						String.valueOf(imagesTaken));
+				PluginManager.getInstance().addToSharedMem("amountofcapturedrawframes" + SessionID,
+						String.valueOf(imagesTakenRAW));
+				
+				PluginManager.getInstance().sendMessage(ApplicationInterface.MSG_CAPTURE_FINISHED, String.valueOf(SessionID));
+				
+				inCapture = false;
+				resultCompleted = 0;
+				imagesTaken = 0;
+				isAllImagesTaken = false;
+			}
+		}
 	}
 
 	@Override
 	public void onPreviewFrame(byte[] data)
 	{
+	}
+	
+	//On some devices which supports RAW capturing may be not enough free memory to capture several RAW
+	//So we need to check available size of memory and compare it to approximate size of all RAWs to be captured 
+	private boolean checkFreeMemory(int imgAmount)
+	{
+		if(captureRAW)
+		{
+			CameraController.Size imageSize = CameraController.getCameraImageSize();
+			int imageWidth = imageSize.getWidth();
+			int imageHeight = imageSize.getHeight();
+			
+			final int freeMemoryAprox = (int) (HeapUtil.getAmountOfMemoryToFitFrames() - (HeapUtil.getRAWFrameSizeInBytes(imageWidth, imageHeight)*imgAmount));
+			if(freeMemoryAprox < 20000000.f) //Left 20 Mb for safety reason - to prevent unexpected system's behavior
+				return false;
+		}
+		
+		return true;
 	}
 }

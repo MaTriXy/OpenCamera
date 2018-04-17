@@ -58,30 +58,13 @@ int Filters_Initialize
 	int max_height
 );
 
+#define ALMA_FILTERS_LQFILTER 1
+
+int Filters_SetFlags(void *instance, int flags);
 
 int Filters_Release
 (
 	void *instance
-);
-
-
-// Filters_FindNoiseLevel - estimate noise level (per color channel) from the image contents
-//
-// Input:
-// in - image to be analyzed
-// reserved - used for debugging, set to NULL
-// sx, sy - image dimensions
-// Output:
-// nl - estimated noise levels
-//
-void Filters_FindNoiseLevel
-(
-	void *instance,
-	Uint8 * in,
-	Uint8 * reserved,
-	int sx,
-	int sy,
-	int nl[3]
 );
 
 
@@ -184,28 +167,6 @@ void Filters_EnhanceEdges
 // Y - filtered image plane
 //
 
-void Filters_PostFilter
-(
-	void *instance,
-	Uint8 *Y,
-	Int32 Scale,
-	int sx,
-	int sy,
-	int stride,
-	int sharpen
-);
-
-void Filters_OuterMirrorFill
-(
-	Uint8 *in,
-	int sx,
-	int sy,
-	int x0,
-	int y0,
-	int w,
-	int h
-);
-
 void Filters_FillFilterPressure
 (
 	Int32 Scale,
@@ -214,7 +175,8 @@ void Filters_FillFilterPressure
 	Uint8 *nMov,
 	Uint8 *mcurTbl,
 	int subsampMov,
-	int sxMov
+	int sxMov,
+	int filterNMovAdd
 );
 
 void Filters_PostFilterQuick
@@ -229,7 +191,8 @@ void Filters_PostFilterQuick
     Uint8 *nMov,
     Uint8 *mcurTbl,
     int subsampMov,
-    int sxMov
+    int sxMov,
+	int filterNMovAdd
 );
 
 void Filters_PostFilterQuick_CPU
@@ -252,7 +215,8 @@ void Filters_PostFilterUV
 	Uint8 *UV_out,
 	Int32 Scale,
 	int sx,
-	int sy
+	int sy,
+	int stride
 );
 
 void Filters_PostFilterUV16bit_CPU
@@ -329,18 +293,6 @@ void Filters_ResidualQuarterCompute16bit
 	int pressure
 );
 
-void Filters_ResidualQuarterCompute16bit_neon
-(
-	Uint8 *in,
-	Int16 *quarterIn,
-	Int16 *quarterOut,
-	int sx,
-	int sy,
-	int sxs,
-	int sys,
-	int pressure
-);
-
 void Filters_ResidualQuarterComputeUV
 (
 	Uint8 *in,
@@ -348,9 +300,10 @@ void Filters_ResidualQuarterComputeUV
 	Uint8 *quarterOut,
 	int sx,
 	int sy,
+	int pstride,
+	int stride,
 	int sxs,
-	int sys,
-	int stride
+	int sys
 );
 
 void Filters_ResidualQuarterComputeUV16bit
@@ -383,8 +336,9 @@ void Filters_FilterLowSpatialUV
 	Uint8 *inUV,
 	int sx,
 	int sy,
-	int Filter,
-	int stride
+	int pstride,
+	int stride,
+	int Filter
 );
 
 void Filters_FilterMoving
@@ -404,6 +358,8 @@ void Filters_FilterMoving
     int stride
 );
 
+void Filters_RefBlur(Uint8 *in, Uint8 *out, Uint8 *nMov,
+		int mstride, int sx, int sy, int stride, int mod);
 
 #if defined __cplusplus
 }

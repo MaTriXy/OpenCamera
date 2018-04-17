@@ -20,20 +20,20 @@ package com.almalence.plugins.export.standard;
 
 import android.content.SharedPreferences;
 import android.location.GpsStatus;
+import android.os.Build;
 import android.preference.PreferenceManager;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 
 /* <!-- +++
- import com.almalence.opencam_plus.MainScreen;
+ import com.almalence.opencam_plus.ApplicationScreen;
  import com.almalence.opencam_plus.PluginExport;
- import com.almalence.opencam_plus.PluginManager;
  import com.almalence.opencam_plus.R;
  +++ --> */
 // <!-- -+-
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.PluginExport;
-import com.almalence.opencam.PluginManager;
 import com.almalence.opencam.R;
 //-+- -->
 
@@ -69,36 +69,46 @@ public class ExportPlugin extends PluginExport
 		sessionID = SessionID;
 		getPrefs();
 
-		isResultFromProcessingPlugin = Boolean.parseBoolean(PluginManager.getInstance().getFromSharedMem(
+		isResultFromProcessingPlugin = Boolean.parseBoolean(ApplicationScreen.getPluginManager().getFromSharedMem(
 				"ResultFromProcessingPlugin" + sessionID));
 
-		PluginManager.getInstance().saveResultPicture(sessionID);
+		
+		ApplicationScreen.getPluginManager().saveResultPicture(sessionID);
 	}
 
 	private void getPrefs()
 	{
-		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
+		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(ApplicationScreen.getMainContext());
 		useGeoTaggingPrefExport = prefs.getBoolean("useGeoTaggingPrefExport", false);
 	}
 
 	@Override
-	public void onResume()
+	public void onStart()
 	{
 		getPrefs();
 
+		if (useGeoTaggingPrefExport)
+		{
+			ApplicationScreen.instance.checkLocationPermission();
+		}		
+	}
+	
+	@Override
+	public void onResume()
+	{
 		isFirstGpsFix = true;
 
 		clearInfoViews();
 
-		if (useGeoTaggingPrefExport)
+		if (useGeoTaggingPrefExport && ApplicationScreen.isLocationPermissionGranted())
 		{
-			View v = LayoutInflater.from(MainScreen.getMainContext()).inflate(R.layout.plugin_export_gps, null);
+			View v = LayoutInflater.from(ApplicationScreen.getMainContext()).inflate(R.layout.plugin_export_gps, null);
 			gpsInfoImage = (RotateImageView) v.findViewById(R.id.gpsInfoImage);
-			gpsInfoImage.setImageDrawable(MainScreen.getMainContext().getResources().getDrawable(R.drawable.gps_off));
+			gpsInfoImage.setImageDrawable(ApplicationScreen.getMainContext().getResources().getDrawable(R.drawable.gps_off));
 
 			addInfoView(gpsInfoImage);
 
-			MLocation.subsribe(MainScreen.getInstance());
+			MLocation.subscribe(ApplicationScreen.instance);
 			MLocation.lm.addGpsStatusListener(new GpsStatus.Listener()
 			{
 
@@ -111,7 +121,7 @@ public class ExportPlugin extends PluginExport
 			});
 		} else
 		{
-			View v = LayoutInflater.from(MainScreen.getMainContext()).inflate(R.layout.plugin_export_gps, null);
+			View v = LayoutInflater.from(ApplicationScreen.getMainContext()).inflate(R.layout.plugin_export_gps, null);
 			gpsInfoImage = (RotateImageView) v.findViewById(R.id.gpsInfoImage);
 			gpsInfoImage.setVisibility(View.INVISIBLE);
 		}
@@ -123,13 +133,13 @@ public class ExportPlugin extends PluginExport
 		{
 		case GpsStatus.GPS_EVENT_STARTED:
 			gpsInfoImage
-					.setImageDrawable(MainScreen.getMainContext().getResources().getDrawable(R.drawable.gps_search));
+					.setImageDrawable(ApplicationScreen.getMainContext().getResources().getDrawable(R.drawable.gps_search));
 			gpsInfoImage.setVisibility(View.VISIBLE);
 			break;
 		case GpsStatus.GPS_EVENT_SATELLITE_STATUS:
 			if (!isFirstGpsFix)
 				return;
-			gpsInfoImage.setImageDrawable(MainScreen.getMainContext().getResources().getDrawable(R.drawable.gps_found));
+			gpsInfoImage.setImageDrawable(ApplicationScreen.getMainContext().getResources().getDrawable(R.drawable.gps_found));
 			gpsInfoImage.setVisibility(View.VISIBLE);
 			isFirstGpsFix = false;
 			break;

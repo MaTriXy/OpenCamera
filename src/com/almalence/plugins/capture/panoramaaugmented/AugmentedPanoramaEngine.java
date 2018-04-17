@@ -34,11 +34,11 @@ import com.almalence.SwapHeap;
 import com.almalence.YuvImage;
 
 /* <!-- +++
- import com.almalence.opencam_plus.MainScreen;
+ import com.almalence.opencam_plus.ApplicationScreen;
  import com.almalence.opencam_plus.cameracontroller.CameraController;
  +++ --> */
 // <!-- -+-
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.cameracontroller.CameraController;
 //-+- -->
 
@@ -527,7 +527,7 @@ public class AugmentedPanoramaEngine implements Renderer, AugmentedRotationRecei
 				frames = (LinkedList<AugmentedFrameTaken>) this.frames.clone();
 			}
 
-			MainScreen.getInstance().queueGLEvent(new Runnable()
+			ApplicationScreen.instance.queueGLEvent(new Runnable()
 			{
 				@Override
 				public void run()
@@ -616,7 +616,7 @@ public class AugmentedPanoramaEngine implements Renderer, AugmentedRotationRecei
 				@Override
 				public void run()
 				{
-					MainScreen.getInstance().queueGLEvent(new Runnable()
+					ApplicationScreen.instance.queueGLEvent(new Runnable()
 					{
 						@Override
 						public void run()
@@ -1315,22 +1315,43 @@ public class AugmentedPanoramaEngine implements Renderer, AugmentedRotationRecei
 								final int in_width = AugmentedPanoramaEngine.this.height;
 								final int in_height = AugmentedPanoramaEngine.this.width;
 								
-								if (CameraController.isFrontCamera())
+								boolean cameraMirrored = CameraController.isFrontCamera();
+								int sensorOrientation = CameraController.getSensorOrientation(cameraMirrored);
+								int flipLR = 0;
+								int flipUD = 0;
+								
+								//Values of flipLR and flipUD was get from tests of devices with different sensor orientation
+								//Right now it doesn't based on some sort of calculation.
+								switch(sensorOrientation)
 								{
-									if (Build.MODEL.contains("Nexus 6"))
-										ImageConversion.TransformNV21N(yuv_address,
-												yuv_address,
-												AugmentedPanoramaEngine.this.height,
-												AugmentedPanoramaEngine.this.width,
-												0, 1, 0);
-									else
-										ImageConversion.TransformNV21N(yuv_address,
-												yuv_address,
-												AugmentedPanoramaEngine.this.height,
-												AugmentedPanoramaEngine.this.width,
-												1, 0, 0);
+									case 90:
+									{
+										if(cameraMirrored)
+											flipUD = 1;
+									}
+										break;
+									case 270:
+									{
+										if(cameraMirrored)
+											flipLR = 1;
+										else
+										{
+											flipLR = 1;
+											flipUD = 1;
+										}
+									}
+										break;
 								}
-
+								
+								if(flipLR == 1 || flipUD == 1) //If any transform is need
+								{
+									ImageConversion.TransformNV21N(yuv_address,
+											yuv_address,
+											AugmentedPanoramaEngine.this.height,
+											AugmentedPanoramaEngine.this.width,
+											flipLR, flipUD, 0);
+								}
+								
 								ImageConversion.convertNV21toGLN(yuv_address,
 										AugmentedFrameTaken.this.rgba_buffer.array(),
 										in_width,
@@ -1343,7 +1364,7 @@ public class AugmentedPanoramaEngine implements Renderer, AugmentedRotationRecei
 										AugmentedPanoramaEngine.this.textureWidth,
 										AugmentedPanoramaEngine.this.textureHeight);
 
-								MainScreen.getInstance().queueGLEvent(new Runnable()
+								ApplicationScreen.instance.queueGLEvent(new Runnable()
 								{
 									@Override
 									public void run()

@@ -30,16 +30,16 @@ import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.egl.EGLDisplay;
 import javax.microedition.khronos.opengles.GL10;
 
+
 /* <!-- +++
- import com.almalence.opencam_plus.PluginManager;
+ import com.almalence.opencam_plus.ApplicationScreen;
  import com.almalence.opencam_plus.cameracontroller.CameraController;
  +++ --> */
 // <!-- -+-
-import com.almalence.opencam.PluginManager;
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.cameracontroller.CameraController;
 //-+- -->
 
-import com.almalence.plugins.capture.video.EglEncoder;
 
 import android.content.Context;
 import android.graphics.PixelFormat;
@@ -53,6 +53,7 @@ import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 
 /**
@@ -127,9 +128,9 @@ public class GLLayer extends GLSurfaceView implements SurfaceHolder.Callback, Re
 	{
 		Log.i(TAG, "GLLayer.onSurfaceCreated()");
 
-		PluginManager.getInstance().onGLSurfaceCreated(gl, config);
+		ApplicationScreen.getPluginManager().onGLSurfaceCreated(gl, config);
 
-		if (PluginManager.getInstance().shouldPreviewToGPU())
+		if (ApplicationScreen.getPluginManager().shouldPreviewToGPU())
 		{
 			final int[] tex = new int[1];
 			GLES20.glGenTextures(1, tex, 0);
@@ -143,38 +144,53 @@ public class GLLayer extends GLSurfaceView implements SurfaceHolder.Callback, Re
 			GLES20.glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
 			this.surfaceTexture = new SurfaceTexture(this.texture_preview);
+			this.surfaceTexture.setDefaultBufferSize(ApplicationScreen.getPreviewWidth(), ApplicationScreen.getPreviewHeight());
 			this.surfaceTexture.setOnFrameAvailableListener(new OnFrameAvailableListener()
 			{
 				@Override
 				public void onFrameAvailable(final SurfaceTexture surfaceTexture)
 				{
-					PluginManager.getInstance().onFrameAvailable();
+					ApplicationScreen.getPluginManager().onFrameAvailable();
 				}
 			});
 
-			final Camera camera = CameraController.getCamera();
-			if (camera == null)
+			if (CameraController.isUseCamera2())
 			{
-				return;
+				ApplicationScreen.instance.runOnUiThread(new Runnable()
+				{
+					@Override
+					public void run()
+					{
+						CameraController.stopCameraPreview();
+						CameraController.startCameraPreview();
+					}
+				});
+			} else
+			{
+				final Camera camera = CameraController.getCamera();
+				if (camera == null)
+				{
+					return;
+				}
+				
+				try
+				{
+					camera.setDisplayOrientation(90);
+				} catch (RuntimeException e)
+				{
+					e.printStackTrace();
+				}
+				
+				try
+				{
+					camera.setPreviewTexture(this.surfaceTexture);
+				} catch (final IOException e)
+				{
+					e.printStackTrace();
+				}
+				
+				camera.startPreview();
 			}
-
-			try
-			{
-				camera.setDisplayOrientation(90);
-			} catch (RuntimeException e)
-			{
-				e.printStackTrace();
-			}
-
-			try
-			{
-				camera.setPreviewTexture(this.surfaceTexture);
-			} catch (final IOException e)
-			{
-				e.printStackTrace();
-			}
-
-			camera.startPreview();
 		}
 	}
 
@@ -184,7 +200,7 @@ public class GLLayer extends GLSurfaceView implements SurfaceHolder.Callback, Re
 	@Override
 	public void onSurfaceChanged(GL10 gl, int width, int height)
 	{
-		PluginManager.getInstance().onGLSurfaceChanged(gl, width, height);
+		ApplicationScreen.getPluginManager().onGLSurfaceChanged(gl, width, height);
 	}
 
 	/**
@@ -192,6 +208,6 @@ public class GLLayer extends GLSurfaceView implements SurfaceHolder.Callback, Re
 	 */
 	public void onDrawFrame(GL10 gl)
 	{
-		PluginManager.getInstance().onGLDrawFrame(gl);
+		ApplicationScreen.getPluginManager().onGLDrawFrame(gl);
 	}
 }

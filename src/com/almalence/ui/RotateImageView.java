@@ -17,11 +17,11 @@
 package com.almalence.ui;
 
 /* <!-- +++
- import com.almalence.opencam_plus.MainScreen;
- import com.almalence.opencam_plus.R;
- +++ --> */
-// <!-- -+-
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam_plus.ApplicationScreen;
+import com.almalence.opencam_plus.R;
++++ --> */
+//<!-- -+-
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.R;
 //-+- -->
 
@@ -47,7 +47,7 @@ public class RotateImageView extends ImageView
 	@SuppressWarnings("unused")
 	private static final String	TAG					= "RotateImageView";
 
-	private static final int	ANIMATION_SPEED		= 360;
+	private static final int	ANIMATION_SPEED		= 720;
 
 	private int					mCurrentDegree		= 0;
 	private int					mStartDegree		= 0;
@@ -213,7 +213,7 @@ public class RotateImageView extends ImageView
 				clearColorFilter();
 			} else
 			{
-				setColorFilter(MainScreen.getMainContext().getResources().getColor(R.color.buttonDisabled));
+				setColorFilter(ApplicationScreen.getMainContext().getResources().getColor(R.color.buttonDisabled));
 			}
 		}
 	}

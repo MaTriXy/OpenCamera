@@ -19,6 +19,10 @@ by Almalence Inc. All Rights Reserved.
 #include <stdio.h>
 #include <string.h>
 #include <jni.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#include <stdint.h>
+
 #include <android/log.h>
 
 #include "ImageConversionUtils.h"
@@ -39,6 +43,16 @@ static Uint8 *OutPic = NULL;
 void __attribute__((constructor)) initialize_openmp() {}
 void __attribute__((destructor)) release_openmp() {}
 
+extern "C" JNIEXPORT jint JNICALL Java_com_almalence_plugins_processing_hdr_AlmaShotHDR_getAffinity
+(
+	JNIEnv* env,
+	jobject thiz
+)
+{
+	uint32_t mask[2];
+	syscall(__NR_sched_getaffinity, gettid(), sizeof(mask), mask);
+	//__android_log_print(ANDROID_LOG_FATAL, "AlmaShot", "Affinity mask: 0x%x", mask[0]);
+}
 
 extern "C" JNIEXPORT jstring JNICALL Java_com_almalence_plugins_processing_hdr_AlmaShotHDR_Initialize
 (
@@ -169,6 +183,8 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_almalence_plugins_processing_hdr_A
 	for (i=0; i<nFrames; ++i)
 			yuv[i] = yuvIn[i];
 
+	Hdr_SortExposures(yuv, sx, sy, nFrames);
+
 	env->ReleaseIntArrayElements(in, (jint*)yuvIn, JNI_ABORT);
 
 	//sprintf (status, "frames total: %d\nsize0: %d\nsize1: %d\nsize2: %d\n", (int)nFrames, jpeg_length[0], jpeg_length[1], jpeg_length[2]);
@@ -198,7 +214,6 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_almalence_plugins_processing_hdr_A
 	int x, y;
 	Uint8 *pview_rgb;
 	Uint32 *pview;
-	int nTable[3] = {1,3,7};
 
 //	__android_log_print(ANDROID_LOG_ERROR, "CameraTest", "Preview CALLED %d %d", sx, sy);
 
@@ -224,18 +239,8 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_almalence_plugins_processing_hdr_A
 
 	if (pview_rgb)
 	{
-		if (noisePref<0)	// eval version
-		{
-//			__android_log_print(ANDROID_LOG_ERROR, "CameraTest", "Hdr_Preview eval version called");
-			Hdr_Preview(&instance, yuv, pview_rgb, NULL, NULL, 256,
-				expoPref, colorPref, ctrstPref, microPref, sx, sy, nFrames, 1, noSegmPref, 0, 0, 1, 0);
-		}
-		else
-		{
-//			__android_log_print(ANDROID_LOG_ERROR, "CameraTest", "Hdr_Preview called");
-			Hdr_Preview(&instance, yuv, pview_rgb, NULL, NULL, 256*nTable[noisePref],
-				expoPref, colorPref, ctrstPref, microPref, sx, sy, nFrames, 1, noSegmPref, 1, 1, 1, 0);
-		}
+		Hdr_Preview(&instance, yuv, pview_rgb, NULL, NULL, 100,
+			expoPref, colorPref, ctrstPref, microPref, sx, sy, nFrames, 1, noSegmPref, 0, noisePref > 0, 1, 0);
 
 //		__android_log_print(ANDROID_LOG_ERROR, "CameraTest", "Hdr_Preview success");
 

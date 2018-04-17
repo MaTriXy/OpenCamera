@@ -15,38 +15,39 @@ The Initial Developer of the Original Code is Almalence Inc.
 Portions created by Initial Developer are Copyright (C) 2013 
 by Almalence Inc. All Rights Reserved.
  */
-
 /* <!-- +++
- package com.almalence.opencam_plus.ui;
- +++ --> */
-// <!-- -+-
+package com.almalence.opencam_plus.ui;
++++ --> */
+//<!-- -+-
 package com.almalence.opencam.ui;
 //-+- -->
 
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import android.annotation.TargetApi;
+import android.content.Context;
+import android.util.Pair;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.RelativeLayout;
 
 /* <!-- +++
- import com.almalence.opencam_plus.MainScreen;
- import com.almalence.opencam_plus.Plugin;
- import com.almalence.opencam_plus.R;
- import com.almalence.opencam_plus.cameracontroller.CameraController;
- import com.almalence.opencam_plus.ui.AlmalenceGUI.ShutterButton;
- +++ --> */
-// <!-- -+-
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam_plus.ApplicationScreen;
+import com.almalence.opencam_plus.Plugin;
+import com.almalence.opencam_plus.cameracontroller.CameraController;
++++ --> */
+//<!-- -+-
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.Plugin;
-import com.almalence.opencam.R;
 import com.almalence.opencam.cameracontroller.CameraController;
-import com.almalence.opencam.ui.AlmalenceGUI.ShutterButton;
 //-+- -->
 
 /***
@@ -65,6 +66,7 @@ public abstract class GUI
 	public boolean			mFlashModeSupported				= false;
 	public boolean			mISOSupported					= false;
 	public boolean			mCameraChangeSupported			= false;
+	public boolean			mCollorEffectsSupported			= false;
 
 	public boolean			mEVLockSupported				= false;
 	public boolean			mWBLockSupported				= false;
@@ -73,6 +75,7 @@ public abstract class GUI
 	
 	public boolean			mManualExposureTimeSupported  	= false;
 	public boolean			mManualFocusDistanceSupported	= false;
+	public boolean			mManualWhiteBalanceSupported	= false;
 	
 	public boolean			isAutoFocusDistance				= true;
 
@@ -92,6 +95,14 @@ public abstract class GUI
 
 	static protected int	mDeviceOrientation			= 0;
 	static protected int	mPreviousDeviceOrientation	= 0;
+	
+	//Rotations values for bitmaps according to Pair<imageDataOrientation, deviceLayoutOrientation>
+	static protected 		Map<Pair<Integer,Integer>, Integer>			mMatrixRotationMap;
+	
+	public enum ShutterButton
+	{
+		DEFAULT, RECORDER_START_WITH_PAUSE, RECORDER_START, RECORDER_STOP_WITH_PAUSE, RECORDER_STOP, RECORDER_RECORDING_WITH_PAUSE, RECORDER_RECORDING, RECORDER_PAUSED, TIMELAPSE_ACTIVE
+	}
 
 	public enum CameraParameter
 	{
@@ -118,6 +129,30 @@ public abstract class GUI
 		ExportViews = new ArrayList<View>();
 
 		ModeViews = new ArrayList<View>();
+		
+		//All possible rotations for bitmap according of combination of image data orientation
+		//and gui's layout orientation
+		mMatrixRotationMap = new HashMap<Pair<Integer, Integer>, Integer>()
+		{
+			{
+				put(new Pair<Integer, Integer>(0, 0), 0);
+				put(new Pair<Integer, Integer>(0, 90), 270);
+				put(new Pair<Integer, Integer>(0, 180), 180);
+				put(new Pair<Integer, Integer>(0, 270), 90);
+				put(new Pair<Integer, Integer>(90, 0), 90);
+				put(new Pair<Integer, Integer>(90, 90), 0);
+				put(new Pair<Integer, Integer>(90, 180), 270);
+				put(new Pair<Integer, Integer>(90, 270), 180);
+				put(new Pair<Integer, Integer>(180, 0), 180);
+				put(new Pair<Integer, Integer>(180, 90), 90);
+				put(new Pair<Integer, Integer>(180, 180), 0);
+				put(new Pair<Integer, Integer>(180, 270), 270);
+				put(new Pair<Integer, Integer>(270, 0), 270);
+				put(new Pair<Integer, Integer>(270, 90), 180);
+				put(new Pair<Integer, Integer>(270, 180), 90);
+				put(new Pair<Integer, Integer>(270, 270), 0);
+			}
+		};
 	}
 
 	abstract public void onStart();
@@ -142,7 +177,7 @@ public abstract class GUI
 	public void removeViews(View viewElement, int layoutId)
 	{
 		List<View> specialView = new ArrayList<View>();
-		RelativeLayout specialLayout = (RelativeLayout) MainScreen.getInstance().findViewById(layoutId);
+		RelativeLayout specialLayout = (RelativeLayout) ApplicationScreen.instance.findViewById(layoutId);
 		for (int i = 0; i < specialLayout.getChildCount(); i++)
 			specialView.add(specialLayout.getChildAt(i));
 
@@ -170,7 +205,7 @@ public abstract class GUI
 	// called to set any indication when export plugin work finished.
 	abstract public void onExportFinished();
 
-	// Called when camera object created in MainScreen.
+	// Called when camera object created in ApplicationScreen.
 	// After camera creation it is possibly to obtain
 	// all camera possibilities such as supported scene mode, flash mode and
 	// etc.
@@ -201,8 +236,9 @@ public abstract class GUI
 
 	// INFO view
 	abstract protected void addInfoView(View view, android.widget.LinearLayout.LayoutParams viewLayoutParams);
+	abstract public void addInfoView(View info_control);
 
-	abstract protected void removeInfoView(View view);
+	abstract public void removeInfoView(View view);
 
 	// MODE SECTION
 	// AddMode
@@ -247,6 +283,17 @@ public abstract class GUI
 	abstract public int getFlashIcon(int flashMode);
 
 	abstract public int getISOIcon(int isoMode);
+	
+	// Methods returns readable camera parameters name
+	abstract public String getSceneName(int sceneMode);
+
+	abstract public String getWBName(int wb);
+
+	abstract public String getFocusName(int focusMode);
+
+	abstract public String getFlashName(int flashMode);
+
+	abstract public String getISOName(int isoMode);
 
 	/* FOCUS MANAGER SECTION */
 	/*
@@ -263,10 +310,6 @@ public abstract class GUI
 
 	abstract public void onVolumeBtnExpo(int keyCode);
 
-	// abstract public void autoFocus();
-	//
-	// abstract public void onAutoFocus(boolean focused, Camera paramCamera);
-
 	@TargetApi(14)
 	abstract public void setFocusParameters();
 
@@ -275,6 +318,8 @@ public abstract class GUI
 	abstract public boolean onKeyDown(boolean isFromMain, int keyCode, KeyEvent event);
 
 	abstract public void disableCameraParameter(CameraParameter iParam, boolean bDisable, boolean bInitMenu, boolean bModeInit);
+	
+	abstract public void filterCameraParameter(CameraParameter iParam, int[] allowedParams);
 
 	abstract public void startProcessingAnimation();
 
@@ -293,12 +338,22 @@ public abstract class GUI
 	public int getDisplayOrientation()
 	{
 		return (mDeviceOrientation + 90) % 360;
+	} //Real device orientation. Landscape is 0
+	
+	public int getImageDataOrientation()
+	{
+		int sensorOrientation = CameraController.getSensorOrientation(CameraController.isFrontCamera()? 1 : 0);
+		
+		int imageOrientation = (mDeviceOrientation + (sensorOrientation + (CameraController.isFrontCamera()? 180 : 0))%360) % 360;
+		return imageOrientation;
 	} // used to operate with image's data
+	//Universal logic to calculate image data orientation based on camera sensor orientation, device orientation and front\back camera mode
 
 	public int getLayoutOrientation()
 	{
 		return (mDeviceOrientation) % 360;
 	} // used to operate with ui controls
+	//Portrait mode is 0 because we locked app's orientation to portrait mode
 
 	public int getDisplayRotation()
 	{
@@ -306,15 +361,50 @@ public abstract class GUI
 		int displayRotationCurrent = orientation == 0 || orientation == 180 ? orientation : (orientation + 180) % 360;
 		return displayRotationCurrent;
 	} // used to operate with plugin's views
+	
+	//Post-processing plugins used that method to get right rotation of preview Bitmap
+	public int getMatrixRotationForBitmap(int iImageDataOrientation, int iLayoutOrientation, boolean isCameraMirrored)
+	{
+//		int compensateRotation = iLayoutOrientation + (iLayoutOrientation == 90 || iLayoutOrientation == 270 ? 180 : 0)%360;
+//		
+//		int rotation = (iImageDataOrientation + compensateRotation + ((isCameraMirrored && (iImageDataOrientation == 90 || iImageDataOrientation == 270)) ? 180 : 0))%360;
+//		
+//		return rotation;
+		
+		//For front camera in portrait mode value of image data orientation isn't mirrored
+		//so we have to correct it to get right value of matrix orientation
+		boolean isPortrait = (iImageDataOrientation == 90 || iImageDataOrientation == 270);
+		if(isCameraMirrored && isPortrait)
+			iImageDataOrientation = (iImageDataOrientation + 180)%360;
+		
+		if((iImageDataOrientation != 0 && iImageDataOrientation != 90 && iImageDataOrientation != 180 && iImageDataOrientation != 270) ||
+		   (iLayoutOrientation != 0 && iLayoutOrientation != 90 && iLayoutOrientation != 180 && iLayoutOrientation != 270))
+			return 0;
+		else
+		{
+			int rotation = mMatrixRotationMap.get(new Pair<Integer, Integer>(iImageDataOrientation, iLayoutOrientation));
+			return rotation;
+		}
+	}
 
 	// mode help procedure
 	abstract public void showHelp(String modeName, String text, int imageID, String Prefs);
+
+	abstract public void setCameraModeGUI(int mode);
 
 	public void showStore()
 	{
 	}
 
 	public void hideStore()
+	{
+	}
+	
+	public void showSonyCameraDeviceExplorer()
+	{
+	}
+
+	public void hideSonyCameraDeviceExplorer()
 	{
 	}
 	

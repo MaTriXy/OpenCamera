@@ -5,6 +5,13 @@ MY_CORE_PATH := $(LOCAL_PATH)
 
 # -------------------- Pre-built commonly-used libraries
 
+# Bento4 Mp4 Parser library
+include $(CLEAR_VARS)
+LOCAL_MODULE := bento4
+LOCAL_SRC_FILES := prebuilt/$(TARGET_ARCH_ABI)/libBento4.a
+LOCAL_EXPORT_C_INCLUDES := $(LOCAL_PATH)/include/bento4
+include $(PREBUILT_STATIC_LIBRARY)
+
 # GNU Open MP library
 include $(CLEAR_VARS)
 LOCAL_MODULE := gomp
@@ -73,6 +80,9 @@ include $(MY_CORE_PATH)/utils/Android.mk
 # Image Conversion and other utilities - interface to Java
 include $(MY_CORE_PATH)/utils-jni/Android.mk
 
+# Video utilities (mp4 editor)
+include $(MY_CORE_PATH)/video/Android.mk
+
 # DRO plugin
 include $(MY_CORE_PATH)/dro/Android.mk
 
@@ -85,11 +95,14 @@ include $(MY_CORE_PATH)/nightprocessing/Android.mk
 # HDR plugin
 include $(MY_CORE_PATH)/hdrprocessing/Android.mk
 
+# Object Removal and Sequence plugin
+include $(MY_CORE_PATH)/movingobjects/Android.mk
+
 # Object Removal plugin
-include $(MY_CORE_PATH)/objectremoval/Android.mk
+#include $(MY_CORE_PATH)/objectremoval/Android.mk
 
 # Sequence photo plugin
-include $(MY_CORE_PATH)/sequence/Android.mk
+#include $(MY_CORE_PATH)/sequence/Android.mk
 
 # Group shot plugin
 include $(MY_CORE_PATH)/groupshot/Android.mk

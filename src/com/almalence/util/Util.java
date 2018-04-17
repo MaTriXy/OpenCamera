@@ -17,7 +17,9 @@
 package com.almalence.util;
 
 import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.text.NumberFormat;
 import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
@@ -48,7 +50,9 @@ import android.net.Uri;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.os.StatFs;
+import android.provider.DocumentsContract;
 import android.provider.Settings;
+import android.support.v4.provider.DocumentFile;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.OrientationEventListener;
@@ -60,11 +64,11 @@ import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 
 /* <!-- +++
- import com.almalence.opencam_plus.MainScreen;
+ import com.almalence.opencam_plus.ApplicationScreen;
  import com.almalence.opencam_plus.cameracontroller.CameraController;
  +++ --> */
 // <!-- -+-
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.cameracontroller.CameraController;
 //-+- -->
 
@@ -389,6 +393,56 @@ public final class Util
 		return orientationHistory;
 	}
 
+	
+	//value to know current interval for orientation. Not using system functions consuming more resources
+	//0 - unknown (need initial calculations), 1- [0 +-40], 2 [270 +-40], 3 - [180 +-40], 4 - [90 +-40]
+	private static int orientationDisplayInterval=0;
+	
+	public static void setOrientationIntervalInitial()
+	{
+		orientationDisplayInterval = 0;
+	}
+	
+	private static void setOrientationInterval(int orientation)
+	{
+		if (orientation>=320 || orientation<40)
+			orientationDisplayInterval = 1;
+		else if (orientation>=230 && orientation<310)
+			orientationDisplayInterval = 2;
+		else if (orientation>=140 && orientation<220)
+			orientationDisplayInterval = 3;
+		else if (orientation>=50 && orientation<130)
+			orientationDisplayInterval = 4;
+	}
+	
+	public static boolean checkOrientationInterval(int orientation)
+	{
+		//if 0 - set initial interval, if not - check if new value is in the same interval
+		switch (orientationDisplayInterval)
+		{
+			case 1:
+				if (orientation>=320 || orientation<40)
+					return true;
+				break;
+			case 2:
+				if (orientation>=230 && orientation<310)
+					return true;
+				break;
+			case 3:
+				if (orientation>=140 && orientation<220)
+					return true;
+				break;
+			case 4:
+				if (orientation>=50 && orientation<130)
+					return true;
+				break;
+			default:
+				break;
+		}
+		setOrientationInterval(orientation);
+		return false;
+	}
+		
 	// Returns the largest picture size which matches the given aspect ratio.
 	public static Size getOptimalVideoSnapshotPictureSize(List<Size> sizes, double targetRatio)
 	{
@@ -514,7 +568,7 @@ public final class Util
 
 			if (hasLatLon)
 			{
-				//Log.d(TAG, "Set gps location");
+				// Log.d(TAG, "Set gps location");
 				parameters.setGpsLatitude(lat);
 				parameters.setGpsLongitude(lon);
 				parameters.setGpsProcessingMethod(loc.getProvider().toUpperCase());
@@ -758,9 +812,14 @@ public final class Util
 	public static void initializeMeteringMatrix()
 	{
 		Matrix matrix = new Matrix();
-		Util.prepareMatrix(matrix, CameraController.isFrontCamera(), 0, MainScreen.getPreviewWidth(),
-				MainScreen.getPreviewHeight());
+		Util.prepareMatrix(matrix, CameraController.isFrontCamera(), 0, ApplicationScreen.getPreviewWidth(),
+				ApplicationScreen.getPreviewHeight());
 		matrix.invert(mMeteringMatrix);
+	}
+	
+	public static Matrix getMeteringMatrix()
+	{
+		return mMeteringMatrix;
 	}
 
 	public static Rect convertToDriverCoordinates(Rect rect)
@@ -838,5 +897,135 @@ public final class Util
 				|| (orientationProc == Configuration.ORIENTATION_LANDSCAPE && rotation == Surface.ROTATION_180)
 				|| (orientationProc == Configuration.ORIENTATION_PORTRAIT && rotation == Surface.ROTATION_90)
 				|| (orientationProc == Configuration.ORIENTATION_PORTRAIT && rotation == Surface.ROTATION_270);
+	}
+
+	// Get File object from DocumentFile object.
+	// It's possible only if documentFile stored in phone memory, not SD-card.
+	public static File getFileFromDocumentFile(DocumentFile documentFile)
+	{
+		try
+		{
+			File file = new File(URI.create(documentFile.getUri().toString()));
+			return file;
+		} catch (Exception e)
+		{
+			return null;
+		}
+	}
+
+	
+//	public static String getAbsolutePathFromDocumentFile(DocumentFile documentFile)
+//	{
+//		// We can't get absolute path from DocumentFile or Uri.
+//		// It is a hack to build absolute path by DocumentFile.
+//		// May not work on some devices.
+//		Uri uri = documentFile.getUri();
+//		final String docId = DocumentsContract.getDocumentId(uri);
+//		final String[] split = docId.split(":");
+//		final String id = split[1];
+//
+//		String sd = null;
+//		sd = System.getenv("SECONDARY_STORAGE");
+//		if (sd == null)
+//		{
+//			sd = System.getenv("EXTERNAL_STORAGE");
+//		}
+//
+//		if (sd != null)
+//		{
+//			// On some devices SECONDARY_STORAGE has several paths
+//			// separated with a colon (":"). This is why we split
+//			// the String.
+//			String[] paths = sd.split(":");
+//			for (String p : paths)
+//			{
+//				File fileSD = new File(p);
+//				if (fileSD.isDirectory())
+//				{
+//					sd = fileSD.getAbsolutePath();
+//				}
+//			}
+//
+//			String documentPath = sd + "/" + id;
+//			return documentPath;
+//		}
+//		return null;
+//	}
+	
+	
+	// Get File absolute path from DocumentFile object.
+	// This method should be used only for files saved to SD-card.
+	public static String getAbsolutePathFromDocumentFile(DocumentFile documentFile)
+	{
+		try{
+		// We can't get absolute path from DocumentFile or Uri.
+		// It is a hack to build absolute path by DocumentFile.
+		// May not work on some devices.
+		Uri uri = documentFile.getUri();
+		final String docId = DocumentsContract.getDocumentId(uri);
+		final String[] split = docId.split(":");
+		final String id = split[1];
+
+		String sd = null;
+		sd = System.getenv("SECONDARY_STORAGE");
+		if (sd == null)
+		{
+//			sd = System.getenv("EXTERNAL_STORAGE");
+			
+			String documentPath = "/storage" + "/" + docId.replace(":", "/");
+			return documentPath;
+		}
+		// On some devices SECONDARY_STORAGE has several paths
+		// separated with a colon (":"). This is why we split
+		// the String.
+		String[] paths = sd.split(":");
+		for (String p : paths)
+		{
+			File fileSD = new File(p);
+			if (fileSD.isDirectory())
+			{
+				sd = fileSD.getAbsolutePath();
+			}
+		}
+
+		String documentPath = sd + "/" + id;
+		return documentPath;
+		}
+		catch(Exception e)
+		{
+			Log.e(TAG, "Got getAbsolutePathFromDocumentFile exception ", e);	
+		}
+		return null;
+	}
+	
+	public static int getMaxImageSizeIndex(android.util.Size[] ImageSizes) {
+		int maxSizeIndex = 0;
+		long maxSize = ImageSizes[0].getWidth() * ImageSizes[0].getHeight();
+		for (int i = 1; i < ImageSizes.length; i++) {
+			long currentSize = ImageSizes[i].getWidth()
+					* ImageSizes[i].getHeight();
+			if (currentSize > maxSize) {
+				maxSizeIndex = i;
+				maxSize = currentSize;
+			}
+		}
+
+		return maxSizeIndex;
+	}
+	
+	public static boolean listContainsSize(List<CameraController.Size> list, CameraController.Size size)
+	{
+		boolean res = false;
+		
+		for (CameraController.Size s : list)
+		{
+			if (s.getWidth() == size.getWidth() && s.getHeight() == size.getHeight())
+			{
+				res = true;
+				break;
+			}
+		}
+		
+		return res;
 	}
 }

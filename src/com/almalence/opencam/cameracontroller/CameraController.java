@@ -26,6 +26,7 @@ package com.almalence.opencam.cameracontroller;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,15 +37,21 @@ import java.util.Set;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
+import android.graphics.Rect;
+import android.graphics.RectF;
 import android.hardware.Camera;
 import android.hardware.Camera.Area;
 import android.hardware.Camera.AutoFocusCallback;
+import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
 import android.media.Image;
+import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.CountDownTimer;
@@ -53,44 +60,180 @@ import android.os.Message;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.util.Log;
+import android.util.Range;
+import android.util.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.widget.Toast;
 
 import com.almalence.SwapHeap;
+import com.almalence.sony.cameraremote.PictureCallbackSonyRemote;
+import com.almalence.sony.cameraremote.ServerDevice;
+import com.almalence.sony.cameraremote.ZoomCallbackSonyRemote;
+import com.almalence.util.ImageConversion;
+import com.almalence.util.Util;
+//<!-- -+-
 import com.almalence.opencam.ApplicationInterface;
+import com.almalence.opencam.ApplicationScreen;
 import com.almalence.opencam.CameraParameters;
 import com.almalence.opencam.MainScreen;
-import com.almalence.opencam.PluginManager;
 import com.almalence.opencam.PluginManagerInterface;
 import com.almalence.opencam.R;
-import com.almalence.util.ImageConversion;
-//<!-- -+-
 
 //-+- -->
 /* <!-- +++
  import com.almalence.opencam_plus.ApplicationInterface;
+ import com.almalence.opencam_plus.ApplicationScreen;
  import com.almalence.opencam_plus.CameraParameters;
- import com.almalence.opencam_plus.MainScreen;
- import com.almalence.opencam_plus.PluginManager;
  import com.almalence.opencam_plus.PluginManagerInterface;
  import com.almalence.opencam_plus.R;
  +++ --> */
 
 public class CameraController implements Camera.PictureCallback, Camera.AutoFocusCallback, Camera.ErrorCallback,
-		Camera.PreviewCallback, Camera.ShutterCallback, Handler.Callback
+		Camera.PreviewCallback, Camera.ShutterCallback, Handler.Callback, PictureCallbackSonyRemote
 {
-	private static final String						TAG								= "CameraController";
+	private static final String						TAG				= "CameraController";
 
 	// YUV_RAW is the same as YUV (ie NV21) except that
 	// noise filtering, edge enhancements and scaler
 	// are disabled if possible
-	public static final int							RAW								= 0x20;
-	public static final int							YUV_RAW							= 0x22;
-	public static final int							YUV								= 0x23;
-	public static final int							JPEG							= 0x100;
+	public static final int							RAW				= 0x20;
+	public static final int							YUV_RAW			= 0x22;
+	public static final int							YUV				= 0x23;
+	public static final int							JPEG			= 0x100;
 
-	protected static final long						MPIX_1080						= 1920 * 1080;
+	protected static final long						MPIX_1080		= 1920 * 1080;
+
+	//Device models markers. Used to separate device dependent program's logic
+	public static boolean							isNexus5x		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").equals("nexus5x");
+	public static boolean							isNexus6p		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").equals("nexus6p");
+	public static boolean							isNexus5		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").equals("nexus5");
+	public static boolean							isNexus6		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").equals("nexus6");
+	public static boolean							isNexus7		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("nexus7");
+	public static boolean							isNexus9		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("nexus9");
+	
+	public static boolean							isNexus5or6		= CameraController.isNexus5  ||
+																	  CameraController.isNexus5x ||
+																	  CameraController.isNexus6  ||
+			  														  CameraController.isNexus6p;
+	
+	public static boolean							isNexus			= CameraController.isNexus5or6 ||
+																	  CameraController.isNexus7    ||
+			  														  CameraController.isNexus9;
+
+	public static boolean							isFlex2			= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h959") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-f510") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h955") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-as995")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h950") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-us995")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-ls996");
+
+	public static boolean							isG5			= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h830")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h850")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h858")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-vs987")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h820")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-ls992")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-us992")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h860n");
+	
+	public static boolean							isG4			= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h818")  ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h815")  ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h812")  ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h810")  ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h811")  ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-ls991") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-vs986") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-us991");
+	
+	public static boolean							isG3			= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-d85")   ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-d72")   ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-d69")   ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-vs985") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-ls990");
+	
+	public static boolean							isG2			= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-d80") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-vs980") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-ls980");
+
+	public static boolean							isAndroidOne	= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("micromaxaq4501");
+
+	public static boolean							isGalaxyS6		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g920") ||
+														  			  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g925");
+
+	public static boolean							isGalaxyS7		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g93");
+	public static boolean							isGalaxyS8		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g950u")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g9500u")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g9550")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g9500")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g950u1")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g955u");
+	
+	public static boolean							isVivoXXX	 	= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("pd1709");
+	
+	public static boolean 							isGalaxyS7Exynos = false;
+	public static boolean 							isGalaxyS7Qualcomm = false;
+	
+	public static boolean							isGalaxyS5		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g900");
+	
+	public static boolean							isGalaxyS4		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("gt-i95");
+	
+	public static boolean							isGalaxyS4Mini	= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("gt-i9190");
+	
+	public static boolean							isGalaxyNote3	= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-n900") ||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-g900");
+	
+	public static boolean							isGalaxyNote4	= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-n910");
+	
+	public static boolean							isGalaxyNote5	= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sm-n920");
+	
+	public static boolean							isHTCOne		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("htcone");
+	public static boolean							isHTCOneX		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("htconex");
+	
+	public static boolean							isSony			= Build.BRAND.toLowerCase(Locale.US).replace(" ", "").contains("sony");
+	
+	public static boolean							isSonyZ5		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e5823")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6603")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6633")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6653")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6683")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("so-01h")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("sov32")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("501so")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e5803")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("so-02h")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6833")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6853")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("e6883")||
+																	  Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("so-03h");
+	
+	public static boolean							isSonyXZP	 	= Build.MANUFACTURER.toLowerCase().replace(" ", "").contains("sony")
+																	  && Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("g8142");
+	
+	public static boolean							isHuawei		= Build.BRAND.toLowerCase(Locale.US).replace(" ", "").contains("huawei");
+	public static boolean							isHuaweiP9		= Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("eva-l19");
+	
+	public static boolean							isGionee		= Build.BRAND.toLowerCase(Locale.US).replace(" ", "").contains("gionee");
+	
+	public static boolean							isOnePlusTwo 	= Build.MANUFACTURER.toLowerCase().replace(" ", "").contains("oneplus")
+																		&& (Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("two") || 
+																			Build.MODEL.contains("2"));
+	
+	public static boolean							isMotoXPure 	= Build.MODEL.toLowerCase().replace(" ", "").contains("xt1575");
+	public static boolean							isHTCM10 	 	= Build.MODEL.toLowerCase().replace(" ", "").contains("htc_m10h")||
+																		Build.MANUFACTURER.toLowerCase().replace(" ", "").contains("htc")
+																		&& (Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("m10")||
+																			Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("htc10"));;
+
+	public static boolean							isMotoZ 		= Build.MANUFACTURER.toLowerCase().replace(" ", "").contains("motorola")
+																		&& (Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("xt1650")||
+																			Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("xt1635-02"));
+	
+	public static boolean							isPixel		 	= Build.MANUFACTURER.toLowerCase().replace(" ", "").contains("google") 
+																	&& Build.MODEL.toLowerCase().replace(" ", "").contains("pixel");
+	
+	public static boolean							motozChangeResolution = false;
 
 	// Android camera parameters constants
 	private static String							sceneAuto;
@@ -109,8 +252,6 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static String							sceneParty;
 	private static String							sceneCandlelight;
 	private static String							sceneBarcode;
-	private static String							sceneHDR;
-	private static String							sceneAR;
 
 	private static String							wbAuto;
 	private static String							wbIncandescent;
@@ -121,6 +262,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static String							wbTwilight;
 	private static String							wbShade;
 
+	private static String							wbAutoSonyRemote;
+	private static String							wbIncandescentSonyRemote;
+	private static String							wbWarmFluorescentSonyRemote;
+	private static String							wbDaylightSonyRemote;
+	private static String							wbCloudyDaylightSonyRemote;
+	private static String							wbShadeSonyRemote;
+
 	private static String							focusAuto;
 	private static String							focusInfinity;
 	private static String							focusNormal;
@@ -129,13 +277,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static String							focusEdof;
 	private static String							focusContinuousVideo;
 	private static String							focusContinuousPicture;
-	private static String							focusAfLock;
 
 	private static String							flashAuto;
 	private static String							flashOn;
 	private static String							flashOff;
 	private static String							flashRedEye;
 	private static String							flashTorch;
+	private static String							flashCaptureTorch;
 
 	private static String							isoAuto;
 	private static String							iso50;
@@ -159,17 +307,24 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static String							iso6400_2;
 	private static String							iso10000_2;
 
-	private static String							meteringAuto;
-	private static String							meteringMatrix;
-	private static String							meteringCenter;
-	private static String							meteringSpot;
+	private static String							colorEffectOffSystem;
+	private static String							colorEffectAquaSystem;
+	private static String							colorEffectBlackboardSystem;
+	private static String							colorEffectMonoSystem;
+	private static String							colorEffectNegativeSystem;
+	private static String							colorEffectPosterizeSystem;
+	private static String							colorEffectSepiaSystem;
+	private static String							colorEffectSolarizeSystem;
+	private static String							colorEffectWhiteboardSystem;
 
 	// List of localized names for camera parameters values
 	private static Map<Integer, String>				mode_scene;
 	private static Map<String, Integer>				key_scene;
 
 	private static Map<Integer, String>				mode_wb;
+	private static Map<Integer, String>				mode_wb_sony_remote;
 	private static Map<String, Integer>				key_wb;
+	private static Map<String, Integer>				key_wb_sony_remote;
 
 	private static Map<Integer, String>				mode_focus;
 	private static Map<String, Integer>				key_focus;
@@ -177,12 +332,14 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static Map<Integer, String>				mode_flash;
 	private static Map<String, Integer>				key_flash;
 
+	private static Map<Integer, String>				mode_color_effect;
+	private static Map<String, Integer>				key_color_effect;
+
 	private static List<Integer>					iso_values;
 	private static List<String>						iso_default;
-	private static Map<String, String>				iso_default_values;
 	private static Map<Integer, String>				mode_iso;
 	private static Map<Integer, String>				mode_iso2;
-	private static Map<Integer, Integer>			mode_iso_HALv3;
+	private static Map<Integer, Integer>			mode_iso_Camera2;
 	private static Map<String, Integer>				key_iso;
 	private static Map<String, Integer>				key_iso2;
 	private static boolean							isUseISO2Keys					= true;
@@ -192,29 +349,34 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static PluginManagerInterface			pluginManager					= null;
 	private static ApplicationInterface				appInterface					= null;
 	protected static Context						mainContext						= null;
+	protected static Handler						messageHandler					= null;
 
 	// Old camera interface
 	private static Camera							camera							= null;
 	private static Camera.Parameters				cameraParameters				= null;
 
+	//Buffer for preview frames. It used to increase preview fps.
 	private static byte[]							pviewBuffer;
 
 	// Message handler for multishot capturing with pause between shots
 	// and different exposure compensations
 	private static Handler							pauseHandler;
 
-	private static boolean							needRelaunch					= false;
+	//Variables used to force start application in Camera2 mode after working in Camera1 mode.
+	//Non trivial logic of working in Camera1/2 modes used in several capture modes on some devices
+	private static boolean							useCamera2OnRelaunch			= false;
 	public static boolean							isOldCameraOneModeLaunched		= false;
 
-	private static boolean							isHALv3							= false;
-	private static boolean							isHALv3Supported				= false;
-	protected static boolean						isRAWCaptureSupported			= false;
-	protected static boolean						isManualSensorSupported			= false;
+	private static boolean							isCamera2						= false; //Flag of using camera2 interface
+	private static boolean							isForceCamera1					= false; //Flag to force using camera1 interface!!!
+	private static boolean							isCamera2Allowed				= false; //Flag to show whether OpenCamera support camera2 mode on current device
+	private static boolean							isCamera2Supported				= false; //Flag to show whether camera2 is available on current device
+	protected static boolean						isRAWCaptureSupported			= false; //Only HARDWARE_LEVEL_FULL devices may capture RAW frames
+	protected static boolean						isManualSensorSupported			= false; //Manual sensor means user's control of white balance and exposure time
+	
+	public static boolean							openCameraWaiting				= false; //TODO: Requesting Permissions at runtime
 
-	// protected static boolean isManualFocus = false;
-	// protected static boolean isManualExposure = false;
-
-	protected static String[]						cameraIdList					= { "" };
+	protected static String[]						cameraIdList					= { "" }; //Id's of front and back cameras
 
 	// Flags to know which camera feature supported at current device
 	private static boolean							mEVSupported					= false;
@@ -223,33 +385,39 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static boolean							mFocusModeSupported				= false;
 	private static boolean							mFlashModeSupported				= false;
 	private static boolean							mISOSupported					= false;
+	private static boolean							mCollorEffectSupported			= false;
 
 	private static int								minExpoCompensation				= 0;
 	private static int								maxExpoCompensation				= 0;
 	private static float							expoCompensationStep			= 0;
 
+	protected static boolean						mOpticalStabilizationSupported	= false;
 	protected static boolean						mVideoStabilizationSupported	= false;
+	protected static boolean						mVideoSnapshotSupported	= false;
 
 	private static int[]							supportedSceneModes;
 	private static int[]							supportedWBModes;
 	private static int[]							supportedFocusModes;
 	private static int[]							supportedFlashModes;
+	private static int[]							supportedCollorEffects;
 	private static int[]							supportedISOModes;
 
 	private static int								maxFocusRegionsSupported;
 	private static int								maxMeteringRegionsSupported;
 
 	protected static int							CameraIndex						= 0;
-	protected static boolean						CameraMirrored					= false;
+	protected static boolean						CameraMirrored					= false; //Front or back camera
 
 	protected static int							mDisplayOrientation				= 0;
 
-	// Image size index for capturing
-	private static int								CapIdx;
+	private static int								CapIdx; // Index of image size in whole image sizes list
 
-	private static Size								imageSize;
+	private static Size								imageSize; // Current image size of frame to be captured
 
-	public static final int							MIN_MPIX_SUPPORTED				= 1280 * 720;
+	protected static int							iPreviewWidth;  //Size of preview frames
+	protected static int							iPreviewHeight;
+
+	public static final int							MIN_MPIX_SUPPORTED				= 1280 * 720; //Image sizes less than this will be discarded from settings
 
 	// Lists of resolutions, their indexes and names (for capturing and preview)
 	protected static List<Long>						ResolutionsMPixList;
@@ -261,15 +429,19 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	public static List<CameraController.Size>		MultishotResolutionsSizeList;
 	public static List<String>						MultishotResolutionsIdxesList;
 	public static List<String>						MultishotResolutionsNamesList;
+	
+	public static List<CameraController.Size>		SupportedVideoSizesList;
+
+	public static List<CameraController.Size>		ResolutionsVideoList;
+	
+	public static List<String>						ColorEffectsNamesList;
 
 	public static List<Integer>						FastIdxelist;
 
 	protected static List<CameraController.Size>	SupportedPreviewSizesList;
 	protected static List<CameraController.Size>	SupportedPictureSizesList;
-	protected static List<CameraController.Size>	SupportedVideoSizesList;
 
-	protected static final CharSequence[]			RATIO_STRINGS					= { " ", "4:3", "3:2", "16:9",
-			"1:1"																	};
+	protected static final CharSequence[]			RATIO_STRINGS					= { " ", "4:3", "3:2", "16:9", "1:1"};
 
 	// States of focus and capture
 	public static final int							FOCUS_STATE_IDLE				= 0;
@@ -283,12 +455,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static int								mFocusState						= FOCUS_STATE_IDLE;
 	private static int								mCaptureState					= CAPTURE_STATE_IDLE;
 
-	protected static int							iCaptureID						= -1;
+	protected static MediaRecorder					mMediaRecorder;
+
+	//Used in onImageAvailable to separate frames for preview and still capture frames
 	protected static Surface						mPreviewSurface					= null;
 
+	//Synchronization object for takeImage and autoFocus methods
 	private static final Object						SYNC_OBJECT						= new Object();
-
-	protected static boolean						appStarted						= false;
 
 	// Singleton access function
 	public static CameraController getInstance()
@@ -299,21 +472,39 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		}
 		return cameraController;
 	}
-
-	private CameraController()
+	
+	public static MediaRecorder getMediaRecorder()
 	{
-
+		if (mMediaRecorder == null)
+		{
+			mMediaRecorder = new MediaRecorder();
+		}
+		
+		return mMediaRecorder;
 	}
 
-	public static void onCreate(Context context, ApplicationInterface app, PluginManagerInterface pluginManagerBase)
+	public static void releaseMediaRecorder()
+	{
+		if (mMediaRecorder != null)
+		{
+			mMediaRecorder.reset();
+			mMediaRecorder.release();
+			mMediaRecorder = null;
+		}
+	}
+	
+	private CameraController(){}
+
+	public static void onCreate(Context context, ApplicationInterface app,
+								PluginManagerInterface pluginManagerBase, Handler msgHandler)
 	{
 		pluginManager = pluginManagerBase;
 		appInterface = app;
 		mainContext = context;
 
-		pauseHandler = new Handler(CameraController.getInstance());
+		messageHandler = msgHandler;
 
-		appStarted = false;
+		pauseHandler = new Handler(CameraController.getInstance());
 
 		isOldCameraOneModeLaunched = false;
 
@@ -333,8 +524,6 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		sceneParty = mainContext.getResources().getString(R.string.scenePartySystem);
 		sceneCandlelight = mainContext.getResources().getString(R.string.sceneCandlelightSystem);
 		sceneBarcode = mainContext.getResources().getString(R.string.sceneBarcodeSystem);
-		sceneHDR = mainContext.getResources().getString(R.string.sceneHDRSystem);
-		sceneAR = mainContext.getResources().getString(R.string.sceneARSystem);
 
 		wbAuto = mainContext.getResources().getString(R.string.wbAutoSystem);
 		wbIncandescent = mainContext.getResources().getString(R.string.wbIncandescentSystem);
@@ -345,6 +534,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		wbTwilight = mainContext.getResources().getString(R.string.wbTwilightSystem);
 		wbShade = mainContext.getResources().getString(R.string.wbShadeSystem);
 
+		wbAutoSonyRemote = mainContext.getResources().getString(R.string.wbAutoSonyRemote);
+		wbIncandescentSonyRemote = mainContext.getResources().getString(R.string.wbIncandescentSonyRemote);
+		wbWarmFluorescentSonyRemote = mainContext.getResources().getString(R.string.wbWarmFluorescentSonyRemote);
+		wbDaylightSonyRemote = mainContext.getResources().getString(R.string.wbDaylightSonyRemote);
+		wbCloudyDaylightSonyRemote = mainContext.getResources().getString(R.string.wbCloudyDaylightSonyRemote);
+		wbShadeSonyRemote = mainContext.getResources().getString(R.string.wbShadeSonyRemote);
+
 		focusAuto = mainContext.getResources().getString(R.string.focusAutoSystem);
 		focusInfinity = mainContext.getResources().getString(R.string.focusInfinitySystem);
 		focusNormal = mainContext.getResources().getString(R.string.focusNormalSystem);
@@ -353,13 +549,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		focusEdof = mainContext.getResources().getString(R.string.focusEdofSystem);
 		focusContinuousVideo = mainContext.getResources().getString(R.string.focusContinuousVideoSystem);
 		focusContinuousPicture = mainContext.getResources().getString(R.string.focusContinuousPictureSystem);
-		focusAfLock = mainContext.getResources().getString(R.string.focusAfLockSystem);
 
 		flashAuto = mainContext.getResources().getString(R.string.flashAutoSystem);
 		flashOn = mainContext.getResources().getString(R.string.flashOnSystem);
 		flashOff = mainContext.getResources().getString(R.string.flashOffSystem);
 		flashRedEye = mainContext.getResources().getString(R.string.flashRedEyeSystem);
 		flashTorch = mainContext.getResources().getString(R.string.flashTorchSystem);
+		flashCaptureTorch = mainContext.getResources().getString(R.string.flashCaptureTorchSystem);
 
 		isoAuto = mainContext.getResources().getString(R.string.isoAutoSystem);
 		iso50 = mainContext.getResources().getString(R.string.iso50System);
@@ -383,10 +579,15 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		iso6400_2 = mainContext.getResources().getString(R.string.iso6400DefaultSystem);
 		iso10000_2 = mainContext.getResources().getString(R.string.iso10000DefaultSystem);
 
-		meteringAuto = mainContext.getResources().getString(R.string.meteringAutoSystem);
-		meteringMatrix = mainContext.getResources().getString(R.string.meteringMatrixSystem);
-		meteringCenter = mainContext.getResources().getString(R.string.meteringCenterSystem);
-		meteringSpot = mainContext.getResources().getString(R.string.meteringSpotSystem);
+		colorEffectOffSystem = mainContext.getResources().getString(R.string.colorEffectOffSystem);
+		colorEffectAquaSystem = mainContext.getResources().getString(R.string.colorEffectAquaSystem);
+		colorEffectBlackboardSystem = mainContext.getResources().getString(R.string.colorEffectBlackboardSystem);
+		colorEffectMonoSystem = mainContext.getResources().getString(R.string.colorEffectMonoSystem);
+		colorEffectNegativeSystem = mainContext.getResources().getString(R.string.colorEffectNegativeSystem);
+		colorEffectPosterizeSystem = mainContext.getResources().getString(R.string.colorEffectPosterizeSystem);
+		colorEffectSepiaSystem = mainContext.getResources().getString(R.string.colorEffectSepiaSystem);
+		colorEffectSolarizeSystem = mainContext.getResources().getString(R.string.colorEffectSolarizeSystem);
+		colorEffectWhiteboardSystem = mainContext.getResources().getString(R.string.colorEffectWhiteboardSystem);
 
 		// List of localized names for camera parameters values
 		mode_scene = new HashMap<Integer, String>()
@@ -447,6 +648,18 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			}
 		};
 
+		mode_wb_sony_remote = new HashMap<Integer, String>()
+		{
+			{
+				put(CameraParameters.WB_MODE_AUTO, wbAutoSonyRemote);
+				put(CameraParameters.WB_MODE_INCANDESCENT, wbIncandescentSonyRemote);
+				put(CameraParameters.WB_MODE_WARM_FLUORESCENT, wbWarmFluorescentSonyRemote);
+				put(CameraParameters.WB_MODE_DAYLIGHT, wbDaylightSonyRemote);
+				put(CameraParameters.WB_MODE_CLOUDY_DAYLIGHT, wbCloudyDaylightSonyRemote);
+				put(CameraParameters.WB_MODE_SHADE, wbShadeSonyRemote);
+			}
+		};
+
 		key_wb = new HashMap<String, Integer>()
 		{
 			{
@@ -458,6 +671,18 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				put(wbCloudyDaylight, CameraParameters.WB_MODE_CLOUDY_DAYLIGHT);
 				put(wbTwilight, CameraParameters.WB_MODE_TWILIGHT);
 				put(wbShade, CameraParameters.WB_MODE_SHADE);
+			}
+		};
+
+		key_wb_sony_remote = new HashMap<String, Integer>()
+		{
+			{
+				put(wbAutoSonyRemote, CameraParameters.WB_MODE_AUTO);
+				put(wbIncandescentSonyRemote, CameraParameters.WB_MODE_INCANDESCENT);
+				put(wbWarmFluorescentSonyRemote, CameraParameters.WB_MODE_WARM_FLUORESCENT);
+				put(wbDaylightSonyRemote, CameraParameters.WB_MODE_DAYLIGHT);
+				put(wbCloudyDaylightSonyRemote, CameraParameters.WB_MODE_CLOUDY_DAYLIGHT);
+				put(wbShadeSonyRemote, CameraParameters.WB_MODE_SHADE);
 			}
 		};
 
@@ -497,6 +722,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				put(CameraParameters.FLASH_MODE_SINGLE, flashOn);
 				put(CameraParameters.FLASH_MODE_REDEYE, flashRedEye);
 				put(CameraParameters.FLASH_MODE_TORCH, flashTorch);
+				put(CameraParameters.FLASH_MODE_CAPTURE_TORCH, flashCaptureTorch);
 			}
 		};
 
@@ -508,6 +734,37 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				put(flashOn, CameraParameters.FLASH_MODE_SINGLE);
 				put(flashRedEye, CameraParameters.FLASH_MODE_REDEYE);
 				put(flashTorch, CameraParameters.FLASH_MODE_TORCH);
+				put(flashCaptureTorch, CameraParameters.FLASH_MODE_CAPTURE_TORCH);
+			}
+		};
+
+		mode_color_effect = new HashMap<Integer, String>()
+		{
+			{
+				put(CameraParameters.COLOR_EFFECT_MODE_OFF, colorEffectOffSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_AQUA, colorEffectAquaSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_BLACKBOARD, colorEffectBlackboardSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_MONO, colorEffectMonoSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_NEGATIVE, colorEffectNegativeSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_POSTERIZE, colorEffectPosterizeSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_SEPIA, colorEffectSepiaSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_SOLARIZE, colorEffectSolarizeSystem);
+				put(CameraParameters.COLOR_EFFECT_MODE_WHITEBOARD, colorEffectWhiteboardSystem);
+			}
+		};
+
+		key_color_effect = new HashMap<String, Integer>()
+		{
+			{
+				put(colorEffectOffSystem, CameraParameters.COLOR_EFFECT_MODE_OFF);
+				put(colorEffectAquaSystem, CameraParameters.COLOR_EFFECT_MODE_AQUA);
+				put(colorEffectBlackboardSystem, CameraParameters.COLOR_EFFECT_MODE_BLACKBOARD);
+				put(colorEffectMonoSystem, CameraParameters.COLOR_EFFECT_MODE_MONO);
+				put(colorEffectNegativeSystem, CameraParameters.COLOR_EFFECT_MODE_NEGATIVE);
+				put(colorEffectPosterizeSystem, CameraParameters.COLOR_EFFECT_MODE_POSTERIZE);
+				put(colorEffectSepiaSystem, CameraParameters.COLOR_EFFECT_MODE_SEPIA);
+				put(colorEffectSolarizeSystem, CameraParameters.COLOR_EFFECT_MODE_SOLARIZE);
+				put(colorEffectWhiteboardSystem, CameraParameters.COLOR_EFFECT_MODE_WHITEBOARD);
 			}
 		};
 
@@ -536,18 +793,6 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				add(iso400);
 				add(iso800);
 				add(iso1600);
-			}
-		};
-
-		iso_default_values = new HashMap<String, String>()
-		{
-			{
-				put(isoAuto, mainContext.getResources().getString(R.string.isoAutoDefaultSystem));
-				put(iso100, mainContext.getResources().getString(R.string.iso100DefaultSystem));
-				put(iso200, mainContext.getResources().getString(R.string.iso200DefaultSystem));
-				put(iso400, mainContext.getResources().getString(R.string.iso400DefaultSystem));
-				put(iso800, mainContext.getResources().getString(R.string.iso800DefaultSystem));
-				put(iso1600, mainContext.getResources().getString(R.string.iso1600DefaultSystem));
 			}
 		};
 
@@ -583,7 +828,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			}
 		};
 
-		mode_iso_HALv3 = new HashMap<Integer, Integer>()
+		mode_iso_Camera2 = new HashMap<Integer, Integer>()
 		{
 			{
 				put(CameraParameters.ISO_AUTO, 1);
@@ -630,60 +875,89 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				put(iso10000_2, CameraParameters.ISO_10000);
 			}
 		};
+		
+		final String model = Build.MODEL.toLowerCase(Locale.US).replace(" ", "");
+		final String hardware = Build.HARDWARE.toLowerCase(Locale.US).replace(" ", "");
+		if (model.contains("sm-g93"))
+		{
+			if (hardware.replace("qual", "q").contains("qcom"))
+				isGalaxyS7Qualcomm = true;
+			else
+				isGalaxyS7Exynos = true;
+		}
 
+		controlCameraLevel();
+
+		SonyRemoteCamera.onCreateSonyRemoteCamera(mainContext, appInterface, pluginManager, messageHandler);
+	}
+
+	public static void controlCameraLevel()
+	{
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mainContext);
 
-		isHALv3 = prefs.getBoolean(mainContext.getResources().getString(R.string.Preference_UseHALv3Key), false);
-		String modeID = PluginManager.getInstance().getActiveModeID();
+		isForceCamera1 = prefs.getBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera1Key), false);
+		if (isForceCamera1)
+			prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera2Key), false)
+			.commit();
+		else
+			prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera2Key), true)
+			.commit();
+		
+		isCamera2 = prefs.getBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera2Key), false);
+		//At that time limited number of devices supports camera2 interface and not all capture modes may support it
+		if (!pluginManager.isCamera2InterfaceAllowed())
+			isCamera2 = false;
 
-		// Temp fix HDR modes for LG G Flex 2.
-		boolean isLgGFlex2 = Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h959")
-				|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h510")
-				|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-f510k");
-
-		if (modeID.equals("video")
-				|| (Build.MODEL.contains("Nexus 6") && (modeID.equals("pixfix") || modeID.equals("panorama_augmented")))
-				|| (isLgGFlex2 && (modeID.equals("hdrmode") || modeID.equals("expobracketing"))))
-			isHALv3 = false;
-		// Boolean isNexus = (Build.MODEL.contains("Nexus 5") ||
-		// Build.MODEL.contains("Nexus 7"));
 		try
 		{
-			if (!(Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT && mainContext.getSystemService("camera") != null))
+			//General support of camera2 interface. OpenCamera allows to use camera2 not on all devices which implements camera2
+			if (Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT && mainContext.getSystemService(Context.CAMERA_SERVICE) != null)
 			{
-				isHALv3 = false;
-				isHALv3Supported = false;
-				prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseHALv3Key), false)
+				isCamera2Supported = true;
+				Camera2Controller.onCreateCamera2(mainContext, appInterface, pluginManager, messageHandler);
+			}
+			
+			//Samsung Galaxy S6 and Note5 was reported as not worked in camera2 mode
+			//Always not focused preview and blinking on every try of focusing
+			if ((!isCamera2Supported || !checkHardwareLevel() || isGalaxyS6 || isGalaxyNote5 || isSonyZ5)// || isSony)
+					|| (!isMotoXPure 
+					 && !isFlex2 
+					 && !isNexus5or6 
+					 && !isAndroidOne  
+					 && !isOnePlusTwo 
+					 && !isG5 
+					 && !isG4 
+					 && !isG3 
+					 && !isG2 
+					 && !isGalaxyS7 
+					 && !isHuaweiP9 
+					 && !isHTCM10
+					 && !isMotoZ
+					 && !isPixel
+					 && !isGalaxyS8
+					 && !isSonyXZP
+					 && !isVivoXXX))
+			{
+				isCamera2 = false;
+				isCamera2Allowed = false;
+				prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera2Key), false)
 						.commit();
 			} else
-				isHALv3Supported = true;
+				isCamera2Allowed = true;
 		} catch (Exception e)
 		{
 			e.printStackTrace();
-			isHALv3 = false;
-			isHALv3Supported = false;
-			prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseHALv3Key), false)
+			isCamera2 = false;
+			isCamera2Allowed = false;
+			isCamera2Supported = false;
+			prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera2Key), false)
 					.commit();
 		}
-
-		if (CameraController.isHALv3Supported)
-		{
-			HALv3.onCreateHALv3();
-			if (!HALv3.checkHardwareLevel())
-			{
-				isHALv3 = false;
-				isHALv3Supported = false;
-				prefs.edit().putBoolean(mainContext.getResources().getString(R.string.Preference_UseHALv3Key), false)
-						.commit();
-			}
-		}
-
 	}
-
-	public static void createHALv3Manager()
+	
+	public static boolean getIsCamera2()
 	{
-		if (CameraController.isHALv3Supported)
-			HALv3.onCreateHALv3();
+		return isCamera2;
 	}
 
 	public static void onStart()
@@ -693,35 +967,34 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	public static void onResume()
 	{
-		String modeID = PluginManager.getInstance().getActiveModeID();
-		if (modeID.equals("hdrmode") || modeID.equals("expobracketing"))
+		if (!CameraController.isRemoteCamera())
 		{
-			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mainContext);
-			if (true == prefs.contains(MainScreen.sExpoPreviewModePref))
+			//Some capture modes may use preview frames to choose good time for capturing.
+			//Such modes is HDR - it count preview frames to let device complete exposure metering for next frame
+			//If preview frames is not receiving, capture plugin use countdown timer to let exposure metering be completed
+			if (pluginManager.isPreviewDependentMode())
 			{
-				previewMode = prefs.getBoolean(MainScreen.sExpoPreviewModePref, true);
-			} else
-				previewMode = true;
+				previewMode = appInterface.getExpoPreviewPref();
 
-			evLatency = 0;
-			previewWorking = false;
-			if (cdt != null)
-			{
-				cdt.cancel();
-				cdt = null;
+				evLatency = 0;
+				previewWorking = false;
+				if (cdt != null)
+				{
+					cdt.cancel();
+					cdt = null;
+				}
 			}
+
+			total_frames = 0;
+
+			if (CameraController.isCamera2Supported)
+				Camera2Controller.onResumeCamera2();
 		}
-
-		total_frames = 0;
-
-		if (CameraController.isHALv3Supported)
-			HALv3.onResumeHALv3();
 	}
 
 	public static void onPause(boolean isModeSwitching)
 	{
-		String modeID = PluginManager.getInstance().getActiveModeID();
-		if (modeID.equals("hdrmode") || modeID.equals("expobracketing"))
+		if (pluginManager.isPreviewDependentMode())
 		{
 			evLatency = 0;
 			previewWorking = false;
@@ -732,55 +1005,81 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			}
 		}
 
+		if (mMediaRecorder != null)
+		{
+			mMediaRecorder.release();
+			mMediaRecorder = null;
+		}
+		
 		total_frames = 0;
 
-		// reset torch
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			try
+			if (!CameraController.isCamera2)
 			{
-				Camera.Parameters p = cameraController.getCameraParameters();
-				if (p != null && cameraController.isFlashModeSupported())
+				//In case when flash mode was TORCH we have to manually switch it off
+				try
 				{
-					p.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
-					cameraController.setCameraParameters(p);
-				}
-			} catch (Exception e)
-			{
-				e.printStackTrace();
-			}
-
-			if (camera != null)
-			{
-				camera.setPreviewCallback(null);
-				camera.stopPreview();
-				if (!isModeSwitching)
+					Camera.Parameters p = cameraController.getCameraParameters();
+					if (p != null && cameraController.isFlashModeSupported())
+					{
+						p.setFlashMode(Camera.Parameters.FLASH_MODE_OFF);
+						cameraController.setCameraParameters(p);
+					}
+				} catch (Exception e)
 				{
-					camera.release();
-					camera = null;
+					e.printStackTrace();
 				}
-			}
+				
+				if (camera != null)
+				{
+					camera.setPreviewCallback(null);
+					//Sony devices, some Huawei devices and Samsung Galaxy S5 has unexpected behavior if preview isn't stopped until mode changes
+					if (isSony || isGalaxyS5 || isHuawei || isGionee)
+						camera.stopPreview();
+					if (!isModeSwitching)
+					{
+						if (!isSony && !isGalaxyS5 && !isHuawei && !isGionee)
+							camera.stopPreview();
+						camera.release();
+						camera = null;
+					}
+				}
+			} else
+				Camera2Controller.onPauseCamera2();
 		} else
-			HALv3.onPauseHALv3();
+		{
+			SonyRemoteCamera.onPauseSonyRemoteCamera();
+		}
 
 		CameraController.mCaptureState = CameraController.CAPTURE_STATE_IDLE;
+		motozChangeResolution = false;
 	}
 
 	public static void onStop()
 	{
-		if (needRelaunch)
+		//Specific case when application will re-start in camera2 mode
+		//In future, probably, will be useless when all capture modes will support camera2 interface
+		if (useCamera2OnRelaunch)
 		{
-			SharedPreferences.Editor prefEditor = PreferenceManager.getDefaultSharedPreferences(
-					MainScreen.getMainContext()).edit();
-			prefEditor.putBoolean(
-					MainScreen.getMainContext().getResources().getString(R.string.Preference_UseHALv3Key), true)
-					.commit();
+			SharedPreferences.Editor prefEditor = PreferenceManager.getDefaultSharedPreferences(mainContext).edit();
+			prefEditor.putBoolean(mainContext.getResources().getString(R.string.Preference_UseCamera2Key), true).commit();
 		}
+
+		if (!CameraController.isRemoteCamera() && CameraController.isCamera2)
+			Camera2Controller.onStopCamera2();
 	}
 
 	public static void onDestroy()
 	{
-		// Does nothing yet
+	}
+	
+	public static boolean checkHardwareLevel()
+	{
+		if (CameraController.isCamera2Supported)
+			return Camera2Controller.checkHardwareLevel();
+		else
+			return false;
 	}
 
 	/* Get different list and maps of camera parameters */
@@ -799,9 +1098,10 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return key_iso;
 	}
 
-	public static Map<Integer, Integer> getIsoModeHALv3()
+	//List of supported ISO for camera2 interface
+	public static Map<Integer, Integer> getIsoModeCamera2()
 	{
-		return mode_iso_HALv3;
+		return mode_iso_Camera2;
 	}
 
 	/* ^^^ Get different list and maps of camera parameters */
@@ -812,9 +1112,27 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	}
 
 	/* Preview buffer methods */
-	public static void allocatePreviewBuffer(int size)
+	public static void allocatePreviewBuffer(double size)
 	{
-		pviewBuffer = new byte[size];
+		try
+		{
+			pviewBuffer = new byte[(int) Math.ceil(size)];
+		}
+		catch(OutOfMemoryError e)
+		{
+			e.printStackTrace();
+
+		    System.gc();
+
+		    try
+		    {
+		    	pviewBuffer = new byte[(int) Math.ceil(size)];
+		    }
+		    catch (OutOfMemoryError e2)
+		    {
+		      e2.printStackTrace();
+		    }
+		}
 	}
 
 	public static byte[] getPreviewBuffer()
@@ -824,31 +1142,60 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	/* ^^^ Preview buffer methods */
 
-	public static void useHALv3(boolean useHALv3)
+	public static boolean isRemoteCamera()
 	{
-		isHALv3 = useHALv3;
+		return (CameraIndex == getNumberOfCameras() - 1);
 	}
 
-	public static boolean isUseHALv3()
+	public static void setUseCamera2(boolean useCamera2)
 	{
-		return isHALv3;
+		isCamera2 = useCamera2;
 	}
 
-	public static void needCameraRelaunch(boolean relaunch)
+	public static boolean isUseCamera2()
 	{
-		needRelaunch = relaunch;
+		return isCamera2;
+	}
+	
+	public static boolean isCamera2Allowed()
+	{
+		return isCamera2Allowed;
+	}
+	
+	//returns camera2 supported level. -1 if not suppoerted.
+	public static int getCamera2Level()
+	{
+		if (isCamera2Supported)
+			return Camera2Controller.getHardwareLevel();
+		return -1;
 	}
 
-	public static boolean isCameraRelaunch()
+	public static boolean isRAWCaptureSupported()
 	{
-		return needRelaunch;
+		return isRAWCaptureSupported;
 	}
 
+	public static boolean isManualSensorSupported()
+	{
+		return isManualSensorSupported;
+	}
+
+	public static void useCamera2OnRelaunch(boolean useCamera2)
+	{
+		useCamera2OnRelaunch = useCamera2;
+	}
+
+	public static boolean isCamera2OnRelaunchUsed()
+	{
+		return useCamera2OnRelaunch;
+	}
+
+	// function showing if Super mode supported by our profile or not.
 	public static boolean isSuperModePossible()
 	{
 		boolean SuperModeOk = false;
 
-		if (isHALv3Supported)
+		if (isCamera2Allowed)
 		{
 			// if we're working via Camera2 API -
 			// check if device conform to Super Mode requirements
@@ -873,48 +1220,30 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 			// hard-code to enable these only, as we have no profiles for
 			// other models at the moment
-			if (CameraController.isNexus() || CameraController.isFlex2())
+			if ((CameraController.isNexus5or6 || 
+				 CameraController.isFlex2 || 
+				 CameraController.isOnePlusTwo || 
+				 CameraController.isGalaxyS7 ||
+				 CameraController.isHTCM10||
+				 CameraController.isG5||
+				 CameraController.isHuaweiP9||
+				 CameraController.isMotoZ||
+				 CameraController.isGalaxyS8
+				 )
+				/*|| CameraController.isGalaxyS6*/
+				/*|| CameraController.isG4*/)
 				SuperModeOk = true;
 		}
 
 		return SuperModeOk;
 	}
 
+	//This code affects only Almalence's implementation of OpenCamera. It used to show Night or Super mode
 	public static boolean isUseSuperMode()
 	{
-		return (isSuperModePossible() && isHALv3) || isOldCameraOneModeLaunched;
+		return (isSuperModePossible() && isCamera2) || (isSuperModePossible() && isOldCameraOneModeLaunched);
 	}
 
-	public static boolean isNexus()
-	{
-		return Build.MODEL.contains("Nexus 5") || Build.MODEL.contains("Nexus 6");
-	}
-
-	public static boolean isFlex2()
-	{
-		return Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h959")
-				|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-f510");
-	}
-
-	// public static boolean isNexus5()
-	// {
-	// return Build.MODEL.contains("Nexus 5");
-	// }
-
-	public static boolean isHALv3Supported()
-	{
-		return isHALv3Supported;
-	}
-
-	public static boolean isRAWCaptureSupported()
-	{
-		return isRAWCaptureSupported;
-	}
-
-	public static boolean isManualSensorSupported()
-	{
-		return isManualSensorSupported;
-	}
 
 	// Google doc's method to determine camera's display orientation
 	public static void setCameraDisplayOrientation(Activity activity, int cameraId, android.hardware.Camera camera)
@@ -951,154 +1280,143 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 		mDisplayOrientation = result;
 		camera.setDisplayOrientation(mDisplayOrientation);
-
-		// //Hack for Samsung SM-P601 (sensor orientation 0, display orientation
-		// 90)
-		// if((info.orientation == 0 && mDisplayOrientation == 90) ||
-		// (info.orientation == 90 && mDisplayOrientation == 90) ||
-		// (info.orientation == 90 && mDisplayOrientation == 270))
-		// mDisplayOrientation = 0;
 	}
 
 	public static int getDisplayOrientation()
 	{
-		// if(!isHALv3)
-		// return mDisplayOrientation;
-		// else
 		return 0;
 	}
 
-	public static void setupCamera(SurfaceHolder holder)
+	//Initial setup of camera device - open, configure orientation, fill and select capture frame size
+	public static void setupCamera(SurfaceHolder holder, boolean openCamera)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera == null || MainScreen.getInstance().getSwitchingMode())
+			// Devices camera setup
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera == null || !openCamera)
 				{
-					if (!MainScreen.getInstance().getSwitchingMode())
+					try
 					{
-						if (Camera.getNumberOfCameras() > 0)
-							camera = Camera.open(CameraIndex);
+						if (openCamera)
+						{
+							if (isSonyZ5)//workaround for Sony Z5 maximum resolution 
+							{
+								try
+								{
+									Method method = Camera.class.getMethod("openLegacy", new Class[] { Integer.TYPE, Integer.TYPE });
+									camera = (Camera)method.invoke(null, new Object[] { Integer.valueOf(CameraIndex), Integer.valueOf(256) });
+								}
+								catch(Exception e)
+								{
+									e.printStackTrace();
+									camera = Camera.open(CameraIndex);
+								}
+							}
+							else
+							{
+								if (Camera.getNumberOfCameras() > 0)
+									camera = Camera.open(CameraIndex);
+								else
+									camera = Camera.open();
+							}
+						}
+
+						Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
+						Camera.getCameraInfo(CameraIndex, cameraInfo);
+						if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT)
+							CameraMirrored = true;
 						else
-							camera = Camera.open();
+							CameraMirrored = false;
 
 						if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN)
 							setAutoFocusMoveCallback(camera);
+					} catch (RuntimeException e)
+					{
+						Log.e(TAG, "Unable to open camera");
+						e.printStackTrace();
 					}
-					MainScreen.getInstance().switchingMode(false);
 
-					Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
-					Camera.getCameraInfo(CameraIndex, cameraInfo);
-					if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT)
-						CameraMirrored = true;
-					else
-						CameraMirrored = false;
-
-				} catch (RuntimeException e)
-				{
-					Log.e(TAG, "Unable to open camera");
-					camera = null;
+					if (camera == null)
+					{
+						Toast.makeText(mainContext, "Unable to start camera", Toast.LENGTH_LONG).show();
+						return;
+					}
 				}
 
-				if (camera == null)
-				{
-					Toast.makeText(mainContext, "Unable to start camera", Toast.LENGTH_LONG).show();
-					return;
-				}
-			}
-
-			try
-			{
+				mOpticalStabilizationSupported = false; //Is available only in camera2. Look at openCamera2 method in CameraController2
+				
 				if (Build.VERSION.SDK_INT > Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-					CameraController.mVideoStabilizationSupported = getVideoStabilizationSupported();
-			} catch (Exception e)
-			{
-				Log.e(TAG, "Unable to set preview display for camera");
-				e.printStackTrace();
-				CameraController.mVideoStabilizationSupported = false;
-			}
+					mVideoStabilizationSupported = getVideoStabilizationSupported();
+				
+				mVideoSnapshotSupported = getVideoSnapshotSupported();
 
-			// screen rotation
-			if (!pluginManager.shouldPreviewToGPU())
-			{
-				try
+				// screen rotation
+				if (!pluginManager.shouldPreviewToGPU())
 				{
-					// int result = (CameraController.getSensorOrientation() +
-					// (CameraMirrored ? 180 : 0)) % 360;
-					// camera.setDisplayOrientation(result);
-					setCameraDisplayOrientation(MainScreen.thiz, CameraIndex, camera);
-				} catch (RuntimeException e)
-				{
-					Log.e(TAG, "Unable to set display orientation for camera");
-					e.printStackTrace();
-				}
+					try
+					{
+						setCameraDisplayOrientation(appInterface.getMainActivity(), CameraIndex, camera);
+					} catch (RuntimeException e)
+					{
+						Log.e(TAG, "Unable to set display orientation for camera");
+						e.printStackTrace();
+					}
 
-				try
-				{
-					camera.setPreviewDisplay(holder);
-				} catch (IOException e)
-				{
-					Log.e(TAG, "Unable to set preview display for camera");
-					e.printStackTrace();
+					try
+					{
+						camera.setPreviewDisplay(holder);
+					} catch (IOException e)
+					{
+						Log.e(TAG, "Unable to set preview display for camera");
+						e.printStackTrace();
+					}
 				}
 			}
-		} else
-			HALv3.openCameraHALv3();
-
-		pluginManager.selectDefaults();
-
-		// if (!CameraController.isHALv3)
-		// {
-		// // screen rotation
-		// try
-		// {
-		// int result = (CameraController.getSensorOrientation() +
-		// (CameraMirrored ? 180 : 0)) % 360;
-		// camera.setDisplayOrientation(result);
-		// } catch (RuntimeException e)
-		// {
-		// Log.e(TAG, "Unable to set display orientation for camera");
-		// e.printStackTrace();
-		// }
-		//
-		// try
-		// {
-		// camera.setPreviewDisplay(holder);
-		// } catch (IOException e)
-		// {
-		// Log.e(TAG, "Unable to set preview display for camera");
-		// e.printStackTrace();
-		// }
-		// }
-
-		CameraController.fillPreviewSizeList();
-		CameraController.fillPictureSizeList();
-
-		if (CameraController.isHALv3)
-		{
-			HALv3.populateCameraDimensionsHALv3();
-			HALv3.populateCameraDimensionsForMultishotsHALv3();
-		} else
-		{
-			populateCameraDimensions();
-			populateCameraDimensionsForMultishots();
-		}
-
-		pluginManager.selectImageDimension(); // updates SX, SY values
-
-		// if (CameraController.isHALv3)
-		// HALv3.setupImageReadersHALv3();
-
-		if (!CameraController.isHALv3)
-		{
-			if (CameraController.isCameraCreated())
+			else
 			{
-				MainScreen.thiz.configureCamera();
-				PluginManager.getInstance().onGUICreate();
-				MainScreen.getGUIManager().onGUICreate();
+				 if(ApplicationScreen.isCameraPermissionGranted())
+				 {
+					 Camera2Controller.openCameraCamera2();
+					 cameraController.mVideoStabilizationSupported = getVideoStabilizationSupported();
+					 cameraController.mVideoSnapshotSupported = false;
+				 }
+				 else
+					openCameraWaiting = true; 
+			}
+
+			pluginManager.selectDefaults();
+
+			CameraController.fillPreviewSizeList();
+			CameraController.fillPictureSizeList();
+			CameraController.getSupportedVideoSizes();
+
+			if (CameraController.isCamera2)
+			{
+				Camera2Controller.populateCameraDimensionsCamera2();
+				Camera2Controller.populateCameraDimensionsForMultishotsCamera2();
+			} else
+			{
+				populateCameraDimensions();
+				populateCameraDimensionsForMultishots();
+			}
+
+			pluginManager.selectImageDimension(); // updates SX, SY values
+
+			if (!CameraController.isCamera2)
+			{
+				if (CameraController.isCameraCreated())
+					appInterface.configureCamera(true);
+			}
+		} else
+		{
+			if (SonyRemoteCamera.mTargetDevice != null)
+			{
+				SonyRemoteCamera.openCameraSonyRemote();
 			}
 		}
+
 	}
 
 	@TargetApi(16)
@@ -1122,61 +1440,123 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	public static boolean isCameraCreated()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isCamera2)
 			return camera != null;
 		else
-			return isCameraCreatedHALv3();
+			return isCameraCreatedCamera2();
 
+	}
+	
+	@TargetApi(21)
+	public static boolean isCameraCreatedCamera2()
+	{
+		return Camera2Controller.getInstance().camDevice != null;
+	}
+
+	//In camera2 interface we may request several image formats to be captured.
+	//CameraController is only provider of such info from camera2 management class
+	public static boolean isCaptureFormatSupported(int captureFormat)
+	{
+		if (isUseCamera2())
+			return Camera2Controller.isCaptureFormatSupported(captureFormat);
+		else
+			return true;
 	}
 
 	@TargetApi(21)
 	public static void setCaptureFormat(int captureFormat)
 	{
-		HALv3.setCaptureFormat(captureFormat);
+		Camera2Controller.setCaptureFormat(captureFormat);
 	}
 
 	@TargetApi(21)
 	public static boolean createCaptureSession(List<Surface> sfl)
 	{
-		return HALv3.createCaptureSession(sfl);
+		return Camera2Controller.createCaptureSession(sfl);
 	}
 
-	@TargetApi(21)
-	public static boolean isCameraCreatedHALv3()
-	{
-		return HALv3.getInstance().camDevice != null;
-	}
 
+	//Image sizes for preview
 	private static void fillPreviewSizeList()
 	{
-		CameraController.SupportedPreviewSizesList = new ArrayList<CameraController.Size>();
-		if (!isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null && camera.getParameters() != null)
+			CameraController.SupportedPreviewSizesList = new ArrayList<CameraController.Size>();
+			if (!isCamera2)
 			{
-				List<Camera.Size> list = camera.getParameters().getSupportedPreviewSizes();
-				for (Camera.Size sz : list)
-					CameraController.SupportedPreviewSizesList.add(new CameraController.Size(sz.width, sz.height));
-			}
+				try
+				{
+					if (camera != null && camera.getParameters() != null)
+					{
+						List<Camera.Size> list = camera.getParameters().getSupportedPreviewSizes();
+						if (list != null)
+						{
+							for (Camera.Size sz : list)
+								CameraController.SupportedPreviewSizesList.add(new CameraController.Size(sz.width,
+										sz.height));
+						}
+					}
+				} catch (Exception e)
+				{
+					e.printStackTrace();
+					return;
+				}
+				;
+			} else
+				CameraController.SupportedPreviewSizesList = Camera2Controller.getPreviewSizeList();
 		} else
-			CameraController.SupportedPreviewSizesList = HALv3.fillPreviewSizeList();
+		{
+			CameraController.SupportedPreviewSizesList = SonyRemoteCamera.getPreviewSizeListRemote();
+		}
 	}
 
+	
+	//Image sizes for still capturing
 	private static void fillPictureSizeList()
 	{
 		CameraController.SupportedPictureSizesList = new ArrayList<CameraController.Size>();
-		if (!isHALv3)
+		if (!isCamera2)
 		{
-			if (camera != null && camera.getParameters() != null)
+			if (camera != null)
 			{
-				List<Camera.Size> list = camera.getParameters().getSupportedPictureSizes();
-				for (Camera.Size sz : list)
-					CameraController.SupportedPictureSizesList.add(new CameraController.Size(sz.width, sz.height));
+				try
+				{
+					Camera.Parameters params = camera.getParameters();
+					if(params != null)
+					{
+						List<Camera.Size> list = camera.getParameters().getSupportedPictureSizes();
+						for (Camera.Size sz : list)
+							CameraController.SupportedPictureSizesList.add(new CameraController.Size(sz.width, sz.height));
+						
+						//check if moto Z, if camera1, if device attached.
+						if (isMotoZ)
+						{
+							motozChangeResolution = true;
+							for (Camera.Size sz : list)
+							{		
+								if (sz.width == 4608 || sz.height == 4608)
+								{
+									motozChangeResolution = false;
+									break;
+								}
+							}
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					e.printStackTrace();
+					camera.release();
+					camera = null;
+					ApplicationScreen.instance.finish();
+				}
 			}
 		} else
-			HALv3.fillPictureSizeList(CameraController.SupportedPictureSizesList);
+			Camera2Controller.fillPictureSizeList(CameraController.SupportedPictureSizesList);
 	}
 
+	//Fills not only supported Sizes list but also its Mega-pixel representation, indexes in list, user-friendly names
+	//and indexes for 'fast' sizes - sizes of preview frames which may used as still capture images
 	public static void populateCameraDimensions()
 	{
 		CameraController.ResolutionsMPixList = new ArrayList<Long>();
@@ -1185,14 +1565,15 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		CameraController.ResolutionsNamesList = new ArrayList<String>();
 		CameraController.FastIdxelist = new ArrayList<Integer>();
 
-		int minMPIX = CameraController.MIN_MPIX_SUPPORTED;
 		Camera.Parameters cp = getCameraParameters();
+		if(cp == null)
+			return;
 		List<Camera.Size> cs = cp.getSupportedPictureSizes();
 
 		if (cs == null)
 			return;
 
-		if (Build.MODEL.contains("HTC One X"))
+		if (CameraController.isHTCOneX)
 		{
 			if (!CameraController.isFrontCamera())
 			{
@@ -1201,7 +1582,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				cs.add(additional);
 			}
 		}
-
+		
 		int iHighestIndex = 0;
 		Camera.Size sHighest = cs.get(0);
 
@@ -1214,8 +1595,58 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			int highestSizeWidth = sHighest.width;
 			int highestSizeHeight = sHighest.height;
 
-			if (Build.MODEL.contains("GT-I9190") && isFrontCamera() && (currSizeWidth * currSizeHeight == 1920 * 1080))
+			//Drop buggy image size on some Samsung device
+			if (CameraController.isGalaxyS4Mini && isFrontCamera() && (currSizeWidth * currSizeHeight == 1920 * 1080))
 				continue;
+
+			if ((long) currSizeWidth * currSizeHeight > (long) highestSizeWidth * highestSizeHeight)
+			{
+				sHighest = s;
+				iHighestIndex = ii;
+			}
+
+			if ((long) currSizeWidth * currSizeHeight < CameraController.MIN_MPIX_SUPPORTED)
+				continue;
+
+			addResolution(ii, currSizeWidth, currSizeHeight);
+		}
+
+		if (CameraController.ResolutionsNamesList.isEmpty())
+		{
+			Camera.Size s = cs.get(iHighestIndex);
+
+			int currSizeWidth = s.width;
+			int currSizeHeight = s.height;
+
+			addResolution(0, currSizeWidth, currSizeHeight);
+		}
+
+		return;
+	}
+
+	//Fill image sizes lists for Sony cameras
+	public static void populateCameraDimensionsSonyRemote()
+	{
+		CameraController.fillPreviewSizeList();
+		CameraController.ResolutionsMPixList = new ArrayList<Long>();
+		CameraController.ResolutionsSizeList = new ArrayList<Size>();
+		CameraController.ResolutionsIdxesList = new ArrayList<String>();
+		CameraController.ResolutionsNamesList = new ArrayList<String>();
+		CameraController.FastIdxelist = new ArrayList<Integer>();
+
+		int minMPIX = CameraController.MIN_MPIX_SUPPORTED;
+
+		int iHighestIndex = 0;
+		CameraController.Size sHighest = SonyRemoteCamera.getPictureSizeListRemote().get(0);
+
+		for (int ii = 0; ii < SonyRemoteCamera.getPictureSizeListRemote().size(); ++ii)
+		{
+			CameraController.Size s = SonyRemoteCamera.getPictureSizeListRemote().get(ii);
+
+			int currSizeWidth = s.getWidth();
+			int currSizeHeight = s.getHeight();
+			int highestSizeWidth = sHighest.getWidth();
+			int highestSizeHeight = sHighest.getHeight();
 
 			if ((long) currSizeWidth * currSizeHeight > (long) highestSizeWidth * highestSizeHeight)
 			{
@@ -1226,30 +1657,30 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			if ((long) currSizeWidth * currSizeHeight < minMPIX)
 				continue;
 
-			fillResolutionsList(ii, currSizeWidth, currSizeHeight);
+			addResolution(ii, currSizeWidth, currSizeHeight);
 		}
 
 		if (CameraController.ResolutionsNamesList.isEmpty())
 		{
-			Camera.Size s = cs.get(iHighestIndex);
+			CameraController.Size s = SonyRemoteCamera.getPictureSizeListRemote().get(iHighestIndex);
 
-			int currSizeWidth = s.width;
-			int currSizeHeight = s.height;
+			int currSizeWidth = s.getWidth();
+			int currSizeHeight = s.getHeight();
 
-			fillResolutionsList(0, currSizeWidth, currSizeHeight);
+			addResolution(0, currSizeWidth, currSizeHeight);
 		}
 
 		return;
 	}
 
-	protected static void fillResolutionsList(int ii, int currSizeWidth, int currSizeHeight)
+	protected static void addResolution(int ii, int currSizeWidth, int currSizeHeight)
 	{
 		boolean needAdd = true;
 		boolean isFast = false;
 
 		Long lmpix = (long) currSizeWidth * currSizeHeight;
 		float mpix = (float) lmpix / 1000000.f;
-		float ratio = (float) currSizeWidth / currSizeHeight;
+		float ratio = (float) ((float) currSizeWidth / (float) currSizeHeight);
 
 		// find good location in a list
 		int loc;
@@ -1334,8 +1765,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 					CameraController.SupportedPreviewSizesList.get(1).getHeight());
 		}
 
-		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-		String prefIdx = prefs.getString(MainScreen.sImageSizeMultishotBackPref, "-1");
+		String prefIdx = appInterface.getSpecialImageSizeIndexPref();
 
 		if (prefIdx.equals("-1"))
 		{
@@ -1356,11 +1786,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			}
 			if (CameraController.SupportedPreviewSizesList != null
 					&& CameraController.SupportedPreviewSizesList.size() > 0 && maxMpx >= MPIX_1080)
-			{
-				SharedPreferences.Editor prefEditor = prefs.edit();
-				prefEditor.putString(MainScreen.sImageSizeMultishotBackPref, String.valueOf(maxFastIdx));
-				prefEditor.commit();
-			}
+				appInterface.setSpecialImageSizeIndexPref(maxFastIdx);
 		}
 
 		return;
@@ -1375,6 +1801,9 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		float mpix = (float) lmpix / 1000000.f;
 		float ratio = (float) currSizeWidth / currSizeHeight;
 
+		if (lmpix < CameraController.MIN_MPIX_SUPPORTED)
+			return;
+		
 		// find good location in a list
 		int loc;
 		for (loc = 0; loc < CameraController.MultishotResolutionsMPixList.size(); ++loc)
@@ -1435,68 +1864,80 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	public static List<CameraController.Size> getSupportedPreviewSizes()
 	{
-		List<CameraController.Size> previewSizes = new ArrayList<CameraController.Size>();
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (CameraController.SupportedPreviewSizesList != null)
+			List<CameraController.Size> previewSizes = new ArrayList<CameraController.Size>();
+			if (!CameraController.isCamera2)
 			{
-				List<CameraController.Size> sizes = SupportedPreviewSizesList;
-				for (CameraController.Size sz : sizes)
-					previewSizes.add(new CameraController.Size(sz.getWidth(), sz.getHeight()));
+				if (CameraController.SupportedPreviewSizesList != null)
+				{
+					List<CameraController.Size> sizes = SupportedPreviewSizesList;
+					for (CameraController.Size sz : sizes)
+						previewSizes.add(new CameraController.Size(sz.getWidth(), sz.getHeight()));
+				} else
+				{
+					Log.d(TAG, "SupportedPreviewSizesList == null");
+				}
+
+				return previewSizes;
+
 			} else
-			{
-				Log.d(TAG, "SupportedPreviewSizesList == null");
-			}
-
-			return previewSizes;
-
+				return Camera2Controller.getPreviewSizeList();
 		} else
-			return HALv3.fillPreviewSizeList();
+		{
+			return SonyRemoteCamera.getPreviewSizeListRemote();
+		}
 	}
 
 	public static void setCameraPreviewSize(CameraController.Size sz)
 	{
-		if (!CameraController.isHALv3)
-		{
-			Camera.Parameters params = getCameraParameters();
-			if (params != null)
-			{
-				params.setPreviewSize(sz.mWidth, sz.mHeight);
-				setCameraParameters(params);
-			}
-		} else
-		{
-			HALv3.setupImageReadersHALv3(sz);
-		}
-	}
+		iPreviewWidth = sz.mWidth;
+		iPreviewHeight = sz.mHeight;
 
-	public static void setSurfaceHolderFixedSize(int width, int height)
-	{
-		if (CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			MainScreen.setSurfaceHolderSize(width, height);
+			if (!CameraController.isCamera2)
+			{
+				Camera.Parameters params = getCameraParameters();
+				if (params != null)
+				{
+					params.setPreviewSize(iPreviewWidth, iPreviewHeight);
+					setCameraParameters(params);
+				}
+			} else
+			{
+				//Camera2 interface doesn't have direct settings of camera preview size
+				//Instead of this in camera2 interface we have to create ImageReaders of desired sizes
+//				Camera2Controller.setupImageReadersCamera2();
+			}
 		}
 	}
 
 	public static List<CameraController.Size> getSupportedPictureSizes()
 	{
 		List<CameraController.Size> pictureSizes = new ArrayList<CameraController.Size>();
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (CameraController.SupportedPictureSizesList != null)
+			if (!CameraController.isCamera2)
 			{
-				pictureSizes = new ArrayList<CameraController.Size>(CameraController.SupportedPictureSizesList);
-			} else if (camera != null && camera.getParameters() != null)
-			{
-				List<Camera.Size> sizes = camera.getParameters().getSupportedPictureSizes();
-				for (Camera.Size sz : sizes)
-					pictureSizes.add(new CameraController.Size(sz.width, sz.height));
+				if (CameraController.SupportedPictureSizesList != null)
+				{
+					pictureSizes = new ArrayList<CameraController.Size>(CameraController.SupportedPictureSizesList);
+				} else if (camera != null && camera.getParameters() != null)
+				{
+					List<Camera.Size> sizes = camera.getParameters().getSupportedPictureSizes();
+					for (Camera.Size sz : sizes)
+						pictureSizes.add(new CameraController.Size(sz.width, sz.height));
+				} else
+				{
+					Log.d(TAG, "camera == null");
+				}
 			} else
-			{
-				Log.d(TAG, "camera == null");
-			}
+				Camera2Controller.fillPictureSizeList(pictureSizes);
 		} else
-			HALv3.fillPictureSizeList(pictureSizes);
+		{
+			SonyRemoteCamera.fillPictureSizeListRemote(pictureSizes);
+		}
 
 		return pictureSizes;
 	}
@@ -1504,14 +1945,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	public static List<CameraController.Size> getSupportedVideoSizes()
 	{
 		List<CameraController.Size> videoSizes = new ArrayList<CameraController.Size>();
-		if (!CameraController.isHALv3)
+		if (!CameraController.isCamera2)
 		{
-			if (CameraController.SupportedVideoSizesList != null)
-			{
-				videoSizes = new ArrayList<CameraController.Size>(CameraController.SupportedVideoSizesList);
-			} else if (camera != null && camera.getParameters() != null)
+			if (camera != null && camera.getParameters() != null)
 			{
 				List<Camera.Size> sizes = camera.getParameters().getSupportedVideoSizes();
+				if (sizes == null)
+					sizes = camera.getParameters().getSupportedPreviewSizes();
 				for (Camera.Size sz : sizes)
 					videoSizes.add(new CameraController.Size(sz.width, sz.height));
 			} else
@@ -1519,9 +1959,22 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				Log.d(TAG, "camera == null");
 			}
 		} else
-			videoSizes = null;
-		// HALv3.fillVideoSizeList(videoSizes);
+			Camera2Controller.fillVideoSizeList(videoSizes);
 
+		// hack to rule out phones unlikely to have 4K video, so no point even offering the option!
+		// both S5 and Note 3 have 128MB standard and 512MB large heap (tested via Samsung RTL), as does Galaxy K Zoom
+		// also added the check for having 128MB standard heap, to support modded LG G2, which has 128MB standard, 256MB large - see https://sourceforge.net/p/opencamera/tickets/9/
+		// 4K video now only supported in camera1 mode and on main back camera.
+		ActivityManager activityManager = (ActivityManager) mainContext.getSystemService(Context.ACTIVITY_SERVICE);
+		if( (activityManager.getMemoryClass() >= 128 || activityManager.getLargeMemoryClass() >= 512)
+			 && !CameraController.isCamera2 && CameraController.CameraIndex == 0
+			 && ((CameraController.isGalaxyNote4 || CameraController.isGalaxyS5 || CameraController.isGalaxyS6) //Add 4K resolution only for tested devices! For example, Nexus 5 can't record 4K video
+			 && !videoSizes.contains(new CameraController.Size(3840, 2160))))  //If device already supports 4K resolution skip adding
+		{
+			videoSizes.add(new CameraController.Size(3840, 2160));
+		}
+		
+		SupportedVideoSizesList = new ArrayList<CameraController.Size>(videoSizes);
 		return videoSizes;
 	}
 
@@ -1540,12 +1993,27 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return CameraController.ResolutionsNamesList;
 	}
 
+	public static List<CameraController.Size> getMultishotResolutionsSizeList()
+	{
+		return CameraController.MultishotResolutionsSizeList;
+	}
+
+	public static List<String> getMultishotResolutionsIdxesList()
+	{
+		return CameraController.MultishotResolutionsIdxesList;
+	}
+
+	public static List<String> getMultishotResolutionsNamesList()
+	{
+		return CameraController.MultishotResolutionsNamesList;
+	}
+
 	public static int getNumberOfCameras()
 	{
-		if (!CameraController.isHALv3)
-			return Camera.getNumberOfCameras();
+		if (!CameraController.isCamera2)
+			return Camera.getNumberOfCameras() + 1;
 		else
-			return CameraController.cameraIdList.length;
+			return CameraController.cameraIdList.length + 1;
 	}
 
 	public static void updateCameraFeatures()
@@ -1559,28 +2027,42 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			mSceneModeSupported = getSceneModeSupported();
 			mWBSupported = getWhiteBalanceSupported();
 			mFocusModeSupported = getFocusModeSupported();
+			mCollorEffectSupported = getCollorEffectSupported();
 			mFlashModeSupported = getFlashModeSupported();
 			mISOSupported = getISOSupported();
 
-			if (!CameraController.isHALv3)
+			if (!CameraController.isRemoteCamera())
 			{
-				if (camera != null && cameraParameters != null)
+				if (!CameraController.isCamera2)
 				{
-					minExpoCompensation = cameraParameters.getMinExposureCompensation();
-					maxExpoCompensation = cameraParameters.getMaxExposureCompensation();
-					expoCompensationStep = cameraParameters.getExposureCompensationStep();
+					if (camera != null && cameraParameters != null)
+					{
+						minExpoCompensation = cameraParameters.getMinExposureCompensation();
+						maxExpoCompensation = cameraParameters.getMaxExposureCompensation();
+						expoCompensationStep = cameraParameters.getExposureCompensationStep();
+					}
+				} else
+				{
+					minExpoCompensation = Camera2Controller.getMinExposureCompensationCamera2();
+					maxExpoCompensation = Camera2Controller.getMaxExposureCompensationCamera2();
+					expoCompensationStep = Camera2Controller.getExposureCompensationStepCamera2();
 				}
 			} else
 			{
-				minExpoCompensation = HALv3.getMinExposureCompensationHALv3();
-				maxExpoCompensation = HALv3.getMaxExposureCompensationHALv3();
-				expoCompensationStep = HALv3.getExposureCompensationStepHALv3();
+				minExpoCompensation = SonyRemoteCamera.getMinExposureCompensationRemote();
+				maxExpoCompensation = SonyRemoteCamera.getMaxExposureCompensationRemote();
+				expoCompensationStep = SonyRemoteCamera.getExposureCompensationStepRemote();
 			}
 
+			
+			//There may be not all supported modes by devices but only those which supported by OpenCamera
 			supportedSceneModes = getSupportedSceneModesInternal();
 			supportedWBModes = getSupportedWhiteBalanceInternal();
 			supportedFocusModes = getSupportedFocusModesInternal();
 			supportedFlashModes = getSupportedFlashModesInternal();
+			supportedCollorEffects = getSupportedCollorEffectsInternal();
+			fillCollorEffectNames();
+
 			supportedISOModes = getSupportedISOInternal();
 
 			maxFocusRegionsSupported = CameraController.getMaxNumFocusAreas();
@@ -1594,23 +2076,11 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	}
 
 	@Override
-	public void onError(int arg0, Camera arg1)
-	{
-		// Not used
-	}
+	public void onError(int arg0, Camera arg1){}
 
-	// ------------ CAMERA PARAMETERS AND CAPABILITIES
-	// SECTION-------------------------------------------
-	public static boolean isAutoExposureLockSupported()
-	{
-		return false;
-	}
-
-	public static boolean isAutoWhiteBalanceLockSupported()
-	{
-		return false;
-	}
-
+	
+	
+	// ------------ CAMERA PARAMETERS AND CAPABILITIES SECTION----------------
 	/*
 	 * CAMERA parameters access functions
 	 * 
@@ -1628,6 +2098,11 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	public static Camera getCamera()
 	{
 		return camera;
+	}
+
+	public static CameraDevice getCamera2()
+	{
+		return Camera2Controller.getCamera2();
 	}
 
 	public static void setCamera(Camera cam)
@@ -1669,32 +2144,47 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return false;
 	}
 
+	//In camera2 interface CameraCharacteristics is quit the same as Camera.Parameters in camera interface
 	@TargetApi(21)
 	public static CameraCharacteristics getCameraCharacteristics()
 	{
-		return HALv3.getCameraParameters2();
+		return Camera2Controller.getCameraCharacteristics();
 	}
 
 	public static void startCameraPreview()
 	{
-		if (camera != null)
+		if (!CameraController.isUseCamera2())
 		{
-			camera.startPreview();
-
-			if (Build.MODEL.equals("Nexus 4"))
+			if (camera != null)
 			{
-				SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-				int initValue = prefs.getInt(MainScreen.sEvPref, 0);
-				CameraController.setCameraExposureCompensation(initValue);
+				camera.startPreview();
+				
+				//Nexus 4 has a buggy behavior
+				if (Build.MODEL.equals("Nexus 4"))
+				{
+					int initValue = appInterface.getEVPref();
+					CameraController.setCameraExposureCompensation(initValue);
+				}
 			}
+		}
+		else {
+			Camera2Controller.startCameraPreview();
 		}
 
 	}
 
 	public static void stopCameraPreview()
 	{
-		if (camera != null)
-			camera.stopPreview();
+		if (!CameraController.isUseCamera2())
+		{
+			if (camera != null)
+			{
+				camera.stopPreview();
+			}
+		} else 
+		{
+			Camera2Controller.stopCameraPreview();
+		}
 	}
 
 	public static void lockCamera()
@@ -1709,16 +2199,38 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			camera.unlock();
 	}
 
+	public static void setRecordingHint(boolean hint)
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				if (camera != null && camera.getParameters() != null)
+				{
+					Camera.Parameters cp = CameraController.getCameraParameters();
+					cp.setRecordingHint(hint);
+					CameraController.setCameraParameters(cp);
+				}
+			}
+		}
+	}
+	
 	@TargetApi(15)
 	public static void setVideoStabilization(boolean stabilization)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null && camera.getParameters() != null
-					&& camera.getParameters().isVideoStabilizationSupported())
+			if (!CameraController.isCamera2)
 			{
-				camera.getParameters().setVideoStabilization(stabilization);
-				setCameraParameters(camera.getParameters());
+				if (camera != null && camera.getParameters() != null
+						&& camera.getParameters().isVideoStabilizationSupported())
+				{
+					camera.getParameters().setVideoStabilization(stabilization);
+					setCameraParameters(camera.getParameters());
+				}
+			} else
+			{
+				Camera2Controller.setVideoStabilizationCamera2(stabilization);
 			}
 		}
 	}
@@ -1726,202 +2238,354 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	@TargetApi(15)
 	public static boolean getVideoStabilizationSupported()
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			try
+			if (!CameraController.isRemoteCamera())
 			{
-				if (camera == null || (camera != null && camera.getParameters() == null))
-					return false;
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
 
-				return camera.getParameters().isVideoStabilizationSupported();
-			} catch (Exception e)
+					return camera.getParameters().isVideoStabilizationSupported();
+				} else
+					return false;
+			} else
 			{
-				e.printStackTrace();
 				return false;
 			}
-		} else
+		} catch (Exception e)
+		{
+			e.printStackTrace();
 			return false;
+		}
+	}
+	
+	public static boolean getVideoSnapshotSupported()
+	{
+		try
+		{
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
+
+					return camera.getParameters().isVideoSnapshotSupported();
+				} else
+					return true;
+			} else
+			{
+				return false;
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
+	public static boolean isOpticalStabilizationSupported()
+	{
+		return mOpticalStabilizationSupported;
 	}
 
 	public static boolean isVideoStabilizationSupported()
 	{
 		return mVideoStabilizationSupported;
 	}
+	
+	public static boolean isVideoSnapshotSupported()
+	{
+		return mVideoSnapshotSupported;
+	}
 
 	public static boolean isExposureLockSupported()
 	{
-
-		if (!CameraController.isHALv3)
+		try
 		{
-			try
+			if (!CameraController.isRemoteCamera())
 			{
-				if (camera == null || (camera != null && camera.getParameters() == null))
-					return false;
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
 
-				return camera.getParameters().isAutoExposureLockSupported();
-			} catch (Exception e)
+					return camera.getParameters().isAutoExposureLockSupported();
+				} else
+					return true;
+			} else
 			{
-				e.printStackTrace();
 				return false;
 			}
-		} else
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	public static boolean isExposureLocked()
+	{
+		try
+		{
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
+
+					return camera.getParameters().getAutoExposureLock();
+				} else
+					return Camera2Controller.isExposureLocked();
+			} else
+			{
+				return false;
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	public static boolean setAutoExposureLock(boolean lock)
+	{
+		try
+		{
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null) || CameraController.isG5)//G5 works incorrectly with exposure lock
+						return false;
+
+					Camera.Parameters params = camera.getParameters();
+					params.setAutoExposureLock(lock);
+					camera.setParameters(params);
+				} else
+					return Camera2Controller.setAutoExposureLock(lock);
+			}
+			else
+				return false;
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		finally
+		{
 			return true;
-	}
-
-	public static boolean isExposureLock()
-	{
-		if (!CameraController.isHALv3)
-		{
-			if (camera == null || (camera != null && camera.getParameters() == null))
-				return false;
-
-			return camera.getParameters().getAutoExposureLock();
-		} else
-			return PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext()).getBoolean(
-					MainScreen.sAELockPref, false);
-	}
-
-	public static void setAutoExposureLock(boolean lock)
-	{
-		if (!CameraController.isHALv3)
-		{
-			try
-			{
-				if (camera == null || (camera != null && camera.getParameters() == null))
-					return;
-
-				Camera.Parameters params = camera.getParameters();
-				params.setAutoExposureLock(lock);
-				camera.setParameters(params);
-			} catch (Exception e)
-			{
-				e.printStackTrace();
-				return;
-			}
-		} else
-			HALv3.setAutoExposureLock(lock);
+		}
 	}
 
 	public static boolean isWhiteBalanceLockSupported()
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			try
+			if (!CameraController.isRemoteCamera())
 			{
-				if (camera == null || (camera != null && camera.getParameters() == null))
-					return false;
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
 
-				return camera.getParameters().isAutoWhiteBalanceLockSupported();
-			} catch (Exception e)
+					return camera.getParameters().isAutoWhiteBalanceLockSupported();
+				} else
+					return true;
+			} else
 			{
-				e.printStackTrace();
 				return false;
 			}
-		} else
-			return true;
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
 	}
 
-	public static boolean isWhiteBalanceLock()
+	public static boolean isWhiteBalanceLocked()
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			if (camera == null || (camera != null && camera.getParameters() == null))
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
+
+					return camera.getParameters().getAutoWhiteBalanceLock();
+				} else
+					return Camera2Controller.isWhiteBalanceLocked();
+			} else
+			{
 				return false;
-
-			return camera.getParameters().getAutoWhiteBalanceLock();
-		} else
-			return PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext()).getBoolean(
-					MainScreen.sAWBLockPref, false);
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
 	}
 
-	public static void setAutoWhiteBalanceLock(boolean lock)
+	public static boolean setAutoWhiteBalanceLock(boolean lock)
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			if (camera == null || (camera != null && camera.getParameters() == null))
-				return;
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (camera == null || (camera != null && camera.getParameters() == null))
+						return false;
 
-			Camera.Parameters params = camera.getParameters();
-			params.setAutoWhiteBalanceLock(lock);
-			camera.setParameters(params);
-		} else
-			HALv3.setAutoWhiteBalanceLock(lock);
+					Camera.Parameters params = camera.getParameters();
+					params.setAutoWhiteBalanceLock(lock);
+					camera.setParameters(params);
+				} else
+					return Camera2Controller.setAutoWhiteBalanceLock(lock);
+			}
+			else
+				return false;
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		finally
+		{
+			return true;
+		}
 	}
 
 	public static boolean isZoomSupported()
 	{
-		if (!CameraController.isHALv3)
+		try
+		{
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (null == camera || camera.getParameters() == null)
+						return false;
+
+					return camera.getParameters().isZoomSupported();
+				} else
+				{
+					return Camera2Controller.isZoomSupportedCamera2();
+				}
+			} else
+			{
+				return SonyRemoteCamera.isZoomAvailable();
+			}
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	public static float getMaxZoom()
+	{
+		if (!CameraController.isRemoteCamera())
 		{
 			try
 			{
-				if (null == camera || camera.getParameters() == null)
-					return false;
+				if (!CameraController.isCamera2)
+				{
+					if (null == camera || camera.getParameters() == null)
+						return 1;
 
-				return camera.getParameters().isZoomSupported();
+					//In camera interface zoom range lay between 0 and maxZoom (not a scale factor!)
+					return camera.getParameters().getMaxZoom();
+				} else
+				{
+					//In camera2 interface zoom range lay between 1 and max scale factor
+					return Camera2Controller.getMaxZoomCamera2();
+				}
 			} catch (Exception e)
 			{
 				e.printStackTrace();
-				return false;
+				return 0;
 			}
 		} else
 		{
-			return HALv3.isZoomSupportedHALv3();
+			return 0;
 		}
 	}
 
-	public static int getMaxZoom()
+	public static void setZoom(float value)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (null == camera || camera.getParameters() == null)
-				return 1;
-
-			return camera.getParameters().getMaxZoom();
-		} else
-		{
-			float maxZoom = HALv3.getMaxZoomHALv3();
-			return (int) (maxZoom - 10.0f);
-		}
-	}
-
-	public static void setZoom(int value)
-	{
-		if (!CameraController.isHALv3)
-		{
-			Camera.Parameters cp = getCameraParameters();
-			if (cp != null)
+			if (!CameraController.isCamera2)
 			{
-				cp.setZoom(value);
-				setCameraParameters(cp);
-			}
-		} else
-			HALv3.setZoom(value / 10.0f + 1f);
+				Camera.Parameters cp = getCameraParameters();
+				if (cp != null)
+				{
+					cp.setZoom((int)value);
+					setCameraParameters(cp);
+				}
+			} else
+				Camera2Controller.setZoom(value);
+		}
+	}
+
+	public static void setZoomCallbackSonyRemote(ZoomCallbackSonyRemote callback)
+	{
+		SonyRemoteCamera.setZoomCallbackSonyRemote(callback);
+	}
+
+	public static void actZoomSonyRemote(final String direction, final String movement)
+	{
+		SonyRemoteCamera.actZoom(direction, movement);
 	}
 
 	// Note: getZoom returns zoom in floating point,
 	// unlike old android camera API which returns it multiplied by 10
 	public static float getZoom()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			Camera.Parameters cp = getCameraParameters();
-			return (cp.getZoom() / 10.0f + 1f);
+			if (!CameraController.isCamera2)
+			{
+				Camera.Parameters cp = getCameraParameters();
+				return (cp.getZoom() / 10.0f + 1f);
+			} else
+				return Camera2Controller.getZoom();
 		} else
-			return HALv3.getZoom();
+		{
+			return 0.0f;
+		}
 	}
 
+	//Luma adoptation used in Expo-bracketing modes and on Qualcomm chipsets
 	public static boolean isLumaAdaptationSupported()
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			if (null == camera || camera.getParameters() == null)
-				return false;
-			Camera.Parameters cp = CameraController.getCameraParameters();
+			if (!CameraController.isRemoteCamera())
+			{
+				if (!CameraController.isCamera2)
+				{
+					if (null == camera || camera.getParameters() == null)
+						return false;
+					Camera.Parameters cp = CameraController.getCameraParameters();
 
-			String luma = cp.get("luma-adaptation");
-			return luma != null;
-		} else
+					String luma = cp.get("luma-adaptation");
+					return luma != null;
+				} else
+				{
+					return false;
+				}
+			} else
+			{
+				return false;
+			}
+		} catch (Exception e)
 		{
+			e.printStackTrace();
 			return false;
 		}
 	}
@@ -1929,24 +2593,30 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	// Used to initialize internal variable
 	private static boolean getExposureCompensationSupported()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				if (cameraParameters != null)
+				if (camera != null)
 				{
-					return cameraParameters.getMinExposureCompensation() != 0
-							&& cameraParameters.getMaxExposureCompensation() != 0;
-				} else
-				{
-					return camera.getParameters().getMinExposureCompensation() != 0
-							&& camera.getParameters().getMaxExposureCompensation() != 0;
-				}
+					if (cameraParameters != null)
+					{
+						return cameraParameters.getMinExposureCompensation() != 0
+								&& cameraParameters.getMaxExposureCompensation() != 0;
+					} else
+					{
+						return camera.getParameters().getMinExposureCompensation() != 0
+								&& camera.getParameters().getMaxExposureCompensation() != 0;
+					}
 
+				} else
+					return false;
 			} else
-				return false;
+				return Camera2Controller.isExposureCompensationSupportedCamera2();
 		} else
-			return HALv3.isExposureCompensationSupportedHALv3();
+		{
+			return SonyRemoteCamera.isExposureCompensationAvailable();
+		}
 	}
 
 	// Used by CameraController class users.
@@ -1970,44 +2640,67 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return expoCompensationStep;
 	}
 
+	//Look at google docs for details about exposure compensation logic
 	public static float getExposureCompensation()
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			if (camera != null && camera.getParameters() != null)
+			if (!CameraController.isRemoteCamera())
 			{
-				Camera.Parameters cameraParameters = CameraController.getCamera().getParameters();
+				if (!CameraController.isCamera2)
+				{
+					if (camera != null && camera.getParameters() != null)
+					{
+						Camera.Parameters cameraParameters = CameraController.getCamera().getParameters();
 
-				return cameraParameters.getExposureCompensation() * cameraParameters.getExposureCompensationStep();
+						return cameraParameters.getExposureCompensation()
+								* cameraParameters.getExposureCompensationStep();
+					} else
+						return 0;
+				} else
+					return appInterface.getEVPref() * Camera2Controller.getExposureCompensationStepCamera2();
 			} else
-				return 0;
-		} else
+			{
+				return SonyRemoteCamera.getExposureCompensationRemote()
+						* SonyRemoteCamera.getExposureCompensationStepRemote();
+			}
+		} catch (Exception e)
 		{
-			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mainContext);
-			return prefs.getInt(MainScreen.sEvPref, 0) * HALv3.getExposureCompensationStepHALv3();
+			e.printStackTrace();
+			return 0;
 		}
 	}
 
 	public static void resetExposureCompensation()
 	{
-		if (!CameraController.isHALv3)
+		try
 		{
-			if (camera != null && camera.getParameters() != null)
+			if (!CameraController.isRemoteCamera())
 			{
-				if (!isExposureCompensationSupported())
-					return;
-				Camera.Parameters params = camera.getParameters();
-				params.setExposureCompensation(0);
-				setCameraParameters(params);
+				if (!CameraController.isCamera2)
+				{
+					if (camera != null && camera.getParameters() != null)
+					{
+						if (!isExposureCompensationSupported())
+							return;
+						Camera.Parameters params = camera.getParameters();
+						params.setExposureCompensation(0);
+						setCameraParameters(params);
+					}
+				} else
+					Camera2Controller.resetExposureCompensationCamera2();
 			}
-		} else
-			HALv3.resetExposureCompensationHALv3();
+		} catch (Exception e)
+		{
+			e.printStackTrace();
+		}
 	}
 
 	private static boolean getSceneModeSupported()
 	{
 		int[] supported_scene = getSupportedSceneModesInternal();
 
+		//If device supports only AUTO scene, we interpret it as scene mode not supported
 		if (supported_scene != null && supported_scene.length == 1)
 			return supported_scene[0] != CameraParameters.SCENE_MODE_AUTO;
 
@@ -2019,37 +2712,46 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return mSceneModeSupported;
 	}
 
+	//Returns not all supported scene modes but only those which is known by OpenCamera
+	//Some device may have exotic scene modes which is not supported by GUI (no icons and names)
+	//All of this is true and for other kinds of methods getSupported*****Internal()
 	private static int[] getSupportedSceneModesInternal()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			List<String> sceneModes = null;
-			if (cameraParameters != null)
+			if (!CameraController.isCamera2)
 			{
-				sceneModes = cameraParameters.getSupportedSceneModes();
-			} else if (camera != null)
-			{
-				sceneModes = camera.getParameters().getSupportedSceneModes();
-			}
-
-			if (camera != null && sceneModes != null)
-			{
-				Set<String> known_scenes = CameraController.key_scene.keySet();
-				sceneModes.retainAll(known_scenes);
-				int[] scenes = new int[sceneModes.size()];
-				for (int i = 0; i < sceneModes.size(); i++)
+				List<String> sceneModes = null;
+				if (cameraParameters != null)
 				{
-					String mode = sceneModes.get(i);
-					if (CameraController.key_scene.containsKey(mode))
-						scenes[i] = CameraController.key_scene.get(mode).byteValue();
+					sceneModes = cameraParameters.getSupportedSceneModes();
+				} else if (camera != null)
+				{
+					sceneModes = camera.getParameters().getSupportedSceneModes();
 				}
 
-				return scenes;
-			}
+				if (camera != null && sceneModes != null)
+				{
+					Set<String> known_scenes = CameraController.key_scene.keySet();
+					sceneModes.retainAll(known_scenes);
+					int[] scenes = new int[sceneModes.size()];
+					for (int i = 0; i < sceneModes.size(); i++)
+					{
+						String mode = sceneModes.get(i);
+						if (CameraController.key_scene.containsKey(mode))
+							scenes[i] = CameraController.key_scene.get(mode).byteValue();
+					}
 
-			return new int[0];
+					return scenes;
+				}
+
+				return new int[0];
+			} else
+				return Camera2Controller.getSupportedSceneModesCamera2();
 		} else
-			return HALv3.getSupportedSceneModesHALv3();
+		{
+			return null;
+		}
 	}
 
 	public static int[] getSupportedSceneModes()
@@ -2080,34 +2782,58 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static int[] getSupportedWhiteBalanceInternal()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			List<String> wbModes;
-			if (cameraParameters != null)
+			if (!CameraController.isCamera2)
 			{
-				wbModes = cameraParameters.getSupportedWhiteBalance();
-			} else
-			{
-				wbModes = camera.getParameters().getSupportedWhiteBalance();
-			}
+				List<String> wbModes;
+				if (cameraParameters != null)
+				{
+					wbModes = cameraParameters.getSupportedWhiteBalance();
+				} else
+				{
+					wbModes = camera.getParameters().getSupportedWhiteBalance();
+				}
 
-			if (camera != null && wbModes != null)
+				if (camera != null && wbModes != null)
+				{
+					Set<String> known_wb = CameraController.key_wb.keySet();
+					wbModes.retainAll(known_wb);
+					int[] wb = new int[wbModes.size()];
+					for (int i = 0; i < wbModes.size(); i++)
+					{
+						String mode = wbModes.get(i);
+						if (CameraController.key_wb.containsKey(mode))
+							wb[i] = CameraController.key_wb.get(mode).byteValue();
+					}
+					return wb;
+				}
+
+				return new int[0];
+			} else
+				return Camera2Controller.getSupportedWhiteBalanceCamera2();
+		} else
+		{
+			// Sony camera modes
+			List<String> wbModes;
+			wbModes = SonyRemoteCamera.getAvailableWhiteBalanceRemote();
+
+			if (wbModes != null)
 			{
-				Set<String> known_wb = CameraController.key_wb.keySet();
+				Set<String> known_wb = CameraController.key_wb_sony_remote.keySet();
 				wbModes.retainAll(known_wb);
 				int[] wb = new int[wbModes.size()];
 				for (int i = 0; i < wbModes.size(); i++)
 				{
 					String mode = wbModes.get(i);
-					if (CameraController.key_wb.containsKey(mode))
-						wb[i] = CameraController.key_wb.get(mode).byteValue();
+					if (CameraController.key_wb_sony_remote.containsKey(mode))
+						wb[i] = CameraController.key_wb_sony_remote.get(mode).byteValue();
 				}
 				return wb;
 			}
 
 			return new int[0];
-		} else
-			return HALv3.getSupportedWhiteBalanceHALv3();
+		}
 	}
 
 	public static int[] getSupportedWhiteBalance()
@@ -2128,7 +2854,8 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	private static boolean getFocusModeSupported()
 	{
 		int[] supported_focus = getSupportedFocusModesInternal();
-		return (supported_focus != null && supported_focus.length > 0 && supported_focus[0] != CameraParameters.AF_MODE_OFF);
+		//Some devices has only AF_MODE_OFF. That mode is useless for OpenCamera, so we ignore it
+		return (supported_focus != null && (supported_focus.length > 1 || (supported_focus.length == 1 && supported_focus[0] != CameraParameters.AF_MODE_OFF)));
 	}
 
 	public static boolean isFocusModeSupported()
@@ -2138,18 +2865,43 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static int[] getSupportedFocusModesInternal()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				List<String> focusModes;
+				if (cameraParameters != null)
+				{
+					focusModes = cameraParameters.getSupportedFocusModes();
+				} else
+				{
+					focusModes = camera.getParameters().getSupportedFocusModes();
+				}
+
+				if (camera != null && focusModes != null)
+				{
+					Set<String> known_focus = CameraController.key_focus.keySet();
+					focusModes.retainAll(known_focus);
+					int[] focus = new int[focusModes.size()];
+					for (int i = 0; i < focusModes.size(); i++)
+					{
+						String mode = focusModes.get(i);
+						if (CameraController.key_focus.containsKey(mode))
+							focus[i] = CameraController.key_focus.get(mode).byteValue();
+					}
+
+					return focus;
+				}
+
+				return new int[0];
+			} else
+				return Camera2Controller.getSupportedFocusModesCamera2();
+		} else
 		{
 			List<String> focusModes;
-			if (cameraParameters != null)
-			{
-				focusModes = cameraParameters.getSupportedFocusModes();
-			} else
-			{
-				focusModes = camera.getParameters().getSupportedFocusModes();
-			}
+			focusModes = SonyRemoteCamera.getAvailableFocusModeRemote();
 
-			if (camera != null && focusModes != null)
+			if (focusModes != null)
 			{
 				Set<String> known_focus = CameraController.key_focus.keySet();
 				focusModes.retainAll(known_focus);
@@ -2165,8 +2917,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			}
 
 			return new int[0];
-		} else
-			return HALv3.getSupportedFocusModesHALv3();
+		}
 	}
 
 	public static int[] getSupportedFocusModes()
@@ -2187,12 +2938,18 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static boolean getFlashModeSupported()
 	{
-		if (CameraController.isHALv3)
-			return HALv3.isFlashModeSupportedHALv3();
-		else
+		if (!CameraController.isRemoteCamera())
 		{
-			int[] supported_flash = getSupportedFlashModesInternal();
-			return supported_flash != null && supported_flash.length > 0;
+			if (CameraController.isCamera2)
+				return Camera2Controller.isFlashModeSupportedCamera2();
+			else
+			{
+				int[] supported_flash = getSupportedFlashModesInternal();
+				return supported_flash != null && supported_flash.length > 0;
+			}
+		} else
+		{
+			return SonyRemoteCamera.isFlashAvailableRemote();
 		}
 	}
 
@@ -2203,44 +2960,58 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static int[] getSupportedFlashModesInternal()
 	{
-		if (CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (isFlashModeSupported())
+			if (CameraController.isCamera2)
 			{
-				int[] flash = new int[5];
-				flash[0] = CameraParameters.FLASH_MODE_AUTO;
-				flash[1] = CameraParameters.FLASH_MODE_OFF;
-				flash[2] = CameraParameters.FLASH_MODE_SINGLE;
-				flash[3] = CameraParameters.FLASH_MODE_REDEYE;
-				flash[4] = CameraParameters.FLASH_MODE_TORCH;
-				return flash;
+				//In camera2 flash is managed not as other parameters. There is no method to get all supported flash modes
+				if (isFlashModeSupported())
+				{
+					int[] flash = new int[6];
+					flash[0] = CameraParameters.FLASH_MODE_AUTO;
+					flash[1] = CameraParameters.FLASH_MODE_OFF;
+					flash[2] = CameraParameters.FLASH_MODE_SINGLE;
+					flash[3] = CameraParameters.FLASH_MODE_REDEYE;
+					flash[4] = CameraParameters.FLASH_MODE_TORCH;
+					flash[5] = CameraParameters.FLASH_MODE_CAPTURE_TORCH; //Artificial mode
+					return flash;
+				}
+			} else
+			{
+
+				List<String> flashModes = null;
+				if (cameraParameters != null)
+				{
+					flashModes = cameraParameters.getSupportedFlashModes();
+				} else
+				{
+					flashModes = camera.getParameters().getSupportedFlashModes();
+				}
+
+				if (flashModes != null && flashModes.contains(CameraController.mode_flash.get(CameraParameters.FLASH_MODE_TORCH)))
+				{
+					// If TORCH mode is available, then also enable CAPTURE_TORCH.
+					flashModes.add(CameraController.mode_flash.get(CameraParameters.FLASH_MODE_CAPTURE_TORCH));
+				}
+
+				if (camera != null && flashModes != null)
+				{
+					Set<String> known_flash = CameraController.key_flash.keySet();
+					flashModes.retainAll(known_flash);
+					int[] flash = new int[flashModes.size()];
+					for (int i = 0; i < flashModes.size(); i++)
+					{
+						String mode = flashModes.get(i);
+						if (CameraController.key_flash.containsKey(mode))
+							flash[i] = CameraController.key_flash.get(flashModes.get(i)).byteValue();
+					}
+
+					return flash;
+				}
 			}
 		} else
 		{
-
-			List<String> flashModes = null;
-			if (cameraParameters != null)
-			{
-				flashModes = cameraParameters.getSupportedFlashModes();
-			} else
-			{
-				flashModes = camera.getParameters().getSupportedFlashModes();
-			}
-
-			if (camera != null && flashModes != null)
-			{
-				Set<String> known_flash = CameraController.key_flash.keySet();
-				flashModes.retainAll(known_flash);
-				int[] flash = new int[flashModes.size()];
-				for (int i = 0; i < flashModes.size(); i++)
-				{
-					String mode = flashModes.get(i);
-					if (CameraController.key_flash.containsKey(mode))
-						flash[i] = CameraController.key_flash.get(flashModes.get(i)).byteValue();
-				}
-
-				return flash;
-			}
+			SonyRemoteCamera.getAvailableFlashModeRemote();
 		}
 
 		return new int[0];
@@ -2262,16 +3033,127 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return flashModes;
 	}
 
+	private static int[] getSupportedCollorEffectsInternal()
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				List<String> collorEffects;
+				if (cameraParameters != null)
+				{
+					collorEffects = cameraParameters.getSupportedColorEffects();
+				} else
+				{
+					collorEffects = camera.getParameters().getSupportedColorEffects();
+				}
+
+				if (camera != null && collorEffects != null)
+				{
+					Set<String> known_collor_effects = CameraController.key_color_effect.keySet();
+					collorEffects.retainAll(known_collor_effects);
+					int[] collorEffect = new int[collorEffects.size()];
+					for (int i = 0; i < collorEffects.size(); i++)
+					{
+						String mode = collorEffects.get(i);
+						if (CameraController.key_color_effect.containsKey(mode))
+							collorEffect[i] = CameraController.key_color_effect.get(mode).byteValue();
+					}
+
+					return collorEffect;
+				}
+
+				return new int[] { 0 };
+			} else
+				return Camera2Controller.getSupportedCollorEffectsCamera2();
+		} else
+		{
+			return new int[] { 0 };
+		}
+	}
+
+	private static void fillCollorEffectNames()
+	{
+		ColorEffectsNamesList = new ArrayList<String>();
+		for (int mode : supportedCollorEffects)
+		{
+			switch (mode)
+			{
+			case CameraParameters.COLOR_EFFECT_MODE_OFF:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectOff));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_AQUA:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectAqua));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_BLACKBOARD:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectBlackboard));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_MONO:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectMono));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_NEGATIVE:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectNegative));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_POSTERIZE:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectPosterize));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_SEPIA:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectSepia));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_SOLARIZE:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectSolarize));
+				break;
+			case CameraParameters.COLOR_EFFECT_MODE_WHITEBOARD:
+				ColorEffectsNamesList.add(mainContext.getResources().getString(R.string.colorEffectWhiteboard));
+				break;
+			}
+		}
+	}
+
+	private static boolean getCollorEffectSupported()
+	{
+		int[] supported_collor_effect = getSupportedCollorEffectsInternal();
+		return (supported_collor_effect != null && supported_collor_effect.length > 1);
+	}
+
+	public static boolean isColorEffectSupported()
+	{
+		return mCollorEffectSupported;
+	}
+
+	public static int[] getSupportedColorEffects()
+	{
+		return supportedCollorEffects;
+	}
+
+	public static List<String> getSupportedColorEffectsNames()
+	{
+		ArrayList<String> collorEffects = new ArrayList<String>();
+		int[] modes = supportedCollorEffects;
+		for (int i : modes)
+		{
+			collorEffects.add(mode_color_effect.get(i));
+		}
+		return collorEffects;
+	}
+
 	private static boolean getISOSupported()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			int[] supported_iso = getSupportedISOInternal();
-			String isoSystem = CameraController.getCameraParameters().get("iso");
-			String isoSystem2 = CameraController.getCameraParameters().get("iso-speed");
-			return supported_iso.length > 0 || isoSystem != null || isoSystem2 != null;
+			if (!CameraController.isCamera2)
+			{
+				int[] supported_iso = getSupportedISOInternal();
+				//ISO is not documented by google, so different devices has in most cases 2 kind of parameter's name for current value of ISO
+				String isoSystem = CameraController.getCameraParameters().get("iso");
+				String isoSystem2 = CameraController.getCameraParameters().get("iso-speed");
+				return supported_iso.length > 0 || isoSystem != null || isoSystem2 != null;
+			} else
+				return Camera2Controller.isISOModeSupportedCamera2();
 		} else
-			return HALv3.isISOModeSupportedHALv3();
+		{
+			return SonyRemoteCamera.isISOModeAvailableRemote();
+		}
 	}
 
 	public static boolean isISOSupported()
@@ -2281,69 +3163,105 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static int[] getSupportedISOInternal()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				List<String> isoModes = null;
-				Camera.Parameters camParams = CameraController.getCameraParameters();
-				String supportedIsoValues = camParams.get("iso-values");
-				String supportedIsoValues2 = camParams.get("iso-speed-values");
-				String supportedIsoValues3 = camParams.get("iso-mode-values");
-				String supportedIsoValues4 = camParams.get("nv-picture-iso-values");
-
-				String delims = "[,]+";
-				String[] isoList = null;
-
-				if (supportedIsoValues != null && !supportedIsoValues.equals(""))
-					isoList = supportedIsoValues.split(delims);
-				else if (supportedIsoValues2 != null && !supportedIsoValues2.equals(""))
-					isoList = supportedIsoValues2.split(delims);
-				else if (supportedIsoValues3 != null && !supportedIsoValues3.equals(""))
-					isoList = supportedIsoValues3.split(delims);
-				else if (supportedIsoValues4 != null && !supportedIsoValues4.equals(""))
-					isoList = supportedIsoValues4.split(delims);
-
-				if (isoList != null)
+				if (camera != null)
 				{
-					isoModes = new ArrayList<String>();
-					for (int i = 0; i < isoList.length; i++)
-						isoModes.add(isoList[i]);
-				} else
-					return new int[0];
+					//ISO is not documented by google,
+					//so different devices has many parameter names for list of supported iso
+					List<String> isoModes = null;
+					Camera.Parameters camParams = CameraController.getCameraParameters();
+					String supportedIsoValues = camParams.get("iso-values");
+					String supportedIsoValues2 = camParams.get("iso-speed-values");
+					String supportedIsoValues3 = camParams.get("iso-mode-values");
+					String supportedIsoValues4 = camParams.get("nv-picture-iso-values");
 
-				int supportedISOCount = 0;
-				for (int i = 0; i < isoModes.size(); i++)
-				{
-					String mode = isoModes.get(i);
-					if (CameraController.key_iso.containsKey(mode))
-						supportedISOCount++;
-					else if (CameraController.key_iso2.containsKey(mode))
-						supportedISOCount++;
-				}
+					String delims = "[,]+";
+					String[] isoList = null;
 
-				int[] iso = new int[supportedISOCount];
-				for (int i = 0, index = 0; i < isoModes.size(); i++)
-				{
-					String mode = isoModes.get(i);
-					if (CameraController.key_iso.containsKey(mode))
+					if (supportedIsoValues != null && !supportedIsoValues.equals(""))
+						isoList = supportedIsoValues.split(delims);
+					else if (supportedIsoValues2 != null && !supportedIsoValues2.equals(""))
+						isoList = supportedIsoValues2.split(delims);
+					else if (supportedIsoValues3 != null && !supportedIsoValues3.equals(""))
+						isoList = supportedIsoValues3.split(delims);
+					else if (supportedIsoValues4 != null && !supportedIsoValues4.equals(""))
+						isoList = supportedIsoValues4.split(delims);
+
+					if (isoList != null)
 					{
-						iso[index++] = CameraController.key_iso.get(isoModes.get(i)).byteValue();
-						isUseISO2Keys = false;
-					} else if (CameraController.key_iso2.containsKey(mode))
+						isoModes = new ArrayList<String>();
+						for (int i = 0; i < isoList.length; i++)
+							isoModes.add(isoList[i]);
+					} else
+						return new int[0];
+
+					int supportedISOCount = 0;
+					for (int i = 0; i < isoModes.size(); i++)
 					{
-						iso[index++] = CameraController.key_iso2.get(isoModes.get(i)).byteValue();
-						isUseISO2Keys = true;
+						String mode = isoModes.get(i);
+						if (CameraController.key_iso.containsKey(mode))
+							supportedISOCount++;
+						else if (CameraController.key_iso2.containsKey(mode))
+							supportedISOCount++;
 					}
 
+					int[] iso = new int[supportedISOCount];
+					for (int i = 0, index = 0; i < isoModes.size(); i++)
+					{
+						String mode = isoModes.get(i);
+						if (CameraController.key_iso.containsKey(mode))
+						{
+							iso[index++] = CameraController.key_iso.get(isoModes.get(i)).byteValue();
+							isUseISO2Keys = false;
+						} else if (CameraController.key_iso2.containsKey(mode))
+						{
+							iso[index++] = CameraController.key_iso2.get(isoModes.get(i)).byteValue();
+							isUseISO2Keys = true;
+						}
+
+					}
+
+					return iso;
 				}
 
-				return iso;
+				return new int[0];
+			} else
+				return Camera2Controller.getSupportedISOModesCamera2();
+		} else
+		{
+			List<String> isoModes = SonyRemoteCamera.getAvailableIsoModeRemote();
+
+			int supportedISOCount = 0;
+			for (int i = 0; i < isoModes.size(); i++)
+			{
+				String mode = isoModes.get(i).toLowerCase();
+				if (CameraController.key_iso.containsKey(mode))
+					supportedISOCount++;
+				else if (CameraController.key_iso2.containsKey(mode))
+					supportedISOCount++;
 			}
 
-			return new int[0];
-		} else
-			return HALv3.getSupportedISOModesHALv3();
+			int[] iso = new int[supportedISOCount];
+			for (int i = 0, index = 0; i < isoModes.size(); i++)
+			{
+				String mode = isoModes.get(i);
+				if (CameraController.key_iso.containsKey(mode))
+				{
+					iso[index++] = CameraController.key_iso.get(isoModes.get(i)).byteValue();
+					isUseISO2Keys = false;
+				} else if (CameraController.key_iso2.containsKey(mode))
+				{
+					iso[index++] = CameraController.key_iso2.get(isoModes.get(i)).byteValue();
+					isUseISO2Keys = true;
+				}
+
+			}
+
+			return iso;
+		}
 	}
 
 	public static int[] getSupportedISO()
@@ -2360,31 +3278,62 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		}
 		return isoNames;
 	}
+	
+	public static int getMinimumSensitivity()
+	{
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraMinimumSensitivity();
+		else
+			return 0;
+	}
+
+	public static int getMaximumSensitivity()
+	{
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraMaximumSensitivity();
+		else
+			return 0;
+	}
+	
+	public static Range<Integer> getCameraSensitivityRange()
+	{
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraSensitivityRange();
+		else
+			return null;
+	}
 
 	/*
-	 * Manual sensor parameters: focus distance and exposure time. Available
-	 * only in Camera2 mode.
+	 * Manual sensor parameters: focus distance and exposure time + manual white
+	 * balance. Available only in Camera2 mode.
 	 */
-	public static boolean isManualFocusDistanceSupported()
+	public static boolean isManualWhiteBalanceSupported()
 	{
-		if (CameraController.isHALv3)
-			return isManualSensorSupported && HALv3.isManualFocusDistanceSupportedHALv3();
+		if (CameraController.isCamera2)
+			return Camera2Controller.isManualWhiteBalanceSupportedCamera2();
 		else
 			return false;
-		// return false;
+	}
+
+	public static boolean isManualFocusDistanceSupported()
+	{
+		if (CameraController.isCamera2)
+			return isManualSensorSupported && Camera2Controller.isManualFocusDistanceSupportedCamera2();
+		else
+			return false;
 	}
 
 	public static float getMinimumFocusDistance()
 	{
-		if (CameraController.isHALv3)
-			return HALv3.getCameraMinimumFocusDistance();
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraMinimumFocusDistance();
 		else
 			return 0;
 	}
 
 	public static boolean isManualExposureTimeSupported()
 	{
-		if (CameraController.isHALv3)
+		if (CameraController.isCamera2)
 		{
 			if (isManualSensorSupported && (getMinimumExposureTime() != getMaximumExposureTime()))
 				return true;
@@ -2392,33 +3341,38 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			return false;
 		} else
 			return false;
-		// return false;
 	}
 
 	public static long getMinimumExposureTime()
 	{
-		if (CameraController.isHALv3)
-			return HALv3.getCameraMinimumExposureTime();
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraMinimumExposureTime();
 		else
 			return 0;
 	}
 
 	public static long getMaximumExposureTime()
 	{
-		if (CameraController.isHALv3)
-			return HALv3.getCameraMaximumExposureTime();
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraMaximumExposureTime();
 		else
 			return 0;
 	}
-
-	// ////////////////////////////////////////////////////
+	
+	public static Range<Long> getCameraExposureRange()
+	{
+		if (CameraController.isCamera2)
+			return Camera2Controller.getCameraExposureRange();
+		else
+			return null;
+	}
 
 	public static int getMaxNumMeteringAreas()
 	{
 		try
 		{
-			if (CameraController.isHALv3)
-				return HALv3.getMaxNumMeteringAreasHALv3();
+			if (CameraController.isCamera2)
+				return Camera2Controller.getMaxNumMeteringAreasCamera2();
 			else if (camera != null)
 			{
 				Camera.Parameters camParams = camera.getParameters();
@@ -2434,8 +3388,8 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static int getMaxNumFocusAreas()
 	{
-		if (CameraController.isHALv3)
-			return HALv3.getMaxNumFocusAreasHALv3();
+		if (CameraController.isCamera2)
+			return Camera2Controller.getMaxNumFocusAreasCamera2();
 		else if (camera != null)
 		{
 			Camera.Parameters camParams = camera.getParameters();
@@ -2470,21 +3424,16 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return CapIdx;
 	}
 
-	public static void setCameraImageSizeIndex(int captureIndex, boolean init)
+	public static void setCameraImageSizeIndex(int captureIndex)
 	{
 		CapIdx = captureIndex;
-		if (init)
-		{
-			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
-			prefs.edit()
-					.putString(CameraIndex == 0 ? MainScreen.sImageSizeRearPref : MainScreen.sImageSizeFrontPref,
-							String.valueOf(captureIndex)).commit();
-		}
 	}
 
 	public static void setCameraImageSize(Size imgSize)
 	{
 		imageSize = imgSize;
+		if (CameraController.isUseCamera2())
+			Camera2Controller.checkImageSize(imageSize);
 	}
 
 	public static Size getCameraImageSize()
@@ -2494,68 +3443,91 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	public static Size getMaxCameraImageSize(int captureFormat)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isCamera2)
 			return imageSize;
 		else
-			return HALv3.getMaxCameraImageSizeHALv3(captureFormat);
+			return Camera2Controller.getMaxCameraImageSizeCamera2(captureFormat);
 	}
 
+	
+	//Universal utility method for all parameters: scene mode, white balance, focus modes and etc.
 	public static boolean isModeAvailable(int[] modeList, int mode)
 	{
 		boolean isAvailable = false;
-		for (int currMode : modeList)
-		{
-			if (currMode == mode)
+		if(modeList != null && modeList.length > 0)
+			for (int currMode : modeList)
 			{
-				isAvailable = true;
-				break;
+				if (currMode == mode)
+				{
+					isAvailable = true;
+					break;
+				}
 			}
-		}
+
 		return isAvailable;
 	}
 
+	
+	/*
+	 * get*****Mode - bunch of methods to get some current camera parameter
+	 * in camera1 interface we may get parameter directly from camera object
+	 * in camera2 interface at current time such information we can get only from SharedPreference
+	 * in future maybe will be possible to get it directly from captureSession
+	 */
 	public static int getSceneMode()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
-						return CameraController.key_scene.get(params.getSceneMode());
-				} catch (Exception e)
-				{
-					e.printStackTrace();
-					Log.e(TAG, "getSceneMode exception: " + e.getMessage());
+					try
+					{
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+							return CameraController.key_scene.get(params.getSceneMode());
+					} catch (Exception e)
+					{
+						e.printStackTrace();
+						Log.e(TAG, "getSceneMode exception: " + e.getMessage());
+					}
 				}
-			}
+			} else
+				return appInterface.getSceneModePref();
 		} else
-			return PreferenceManager.getDefaultSharedPreferences(mainContext).getInt(MainScreen.sSceneModePref, -1);
+		{
+			return -1;
+		}
 
 		return -1;
 	}
 
 	public static int getWBMode()
 	{
-		if (!CameraController.isHALv3)
+		if (!isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
-						return CameraController.key_wb.get(params.getWhiteBalance());
-				} catch (Exception e)
-				{
-					e.printStackTrace();
-					Log.e(TAG, "getWBMode exception: " + e.getMessage());
+					try
+					{
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+							return CameraController.key_wb.get(params.getWhiteBalance());
+					} catch (Exception e)
+					{
+						e.printStackTrace();
+						Log.e(TAG, "getWBMode exception: " + e.getMessage());
+					}
 				}
-			}
+			} else
+				return appInterface.getWBModePref();
 		} else
-			return PreferenceManager.getDefaultSharedPreferences(mainContext).getInt(MainScreen.sWBModePref, -1);
+		{
+			return CameraController.key_wb_sony_remote.get(SonyRemoteCamera.getWhiteBalanceRemote());
+		}
 
 		return -1;
 	}
@@ -2563,214 +3535,278 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	public static int getFocusMode()
 	{
 
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			try
+			if (!CameraController.isCamera2)
 			{
-				if (camera != null)
+				try
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
-						return CameraController.key_focus.get(params.getFocusMode());
+					if (camera != null)
+					{
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+							return CameraController.key_focus.get(params.getFocusMode());
+					}
+				} catch (Exception e)
+				{
+					e.printStackTrace();
+					Log.e(TAG, "getFocusMode exception: " + e.getMessage());
 				}
-			} catch (Exception e)
-			{
-				e.printStackTrace();
-				Log.e(TAG, "getFocusMode exception: " + e.getMessage());
-			}
+			} else
+				return appInterface.getFocusModePref(-1);
 		} else
-			return PreferenceManager.getDefaultSharedPreferences(mainContext).getInt(
-					CameraMirrored ? MainScreen.sRearFocusModePref : MainScreen.sFrontFocusModePref, -1);
+		{
+			return -1;
+		}
 
 		return -1;
 	}
 
 	public static int getFlashMode()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
-						return CameraController.key_flash.get(params.getFlashMode());
-				} catch (Exception e)
-				{
-					e.printStackTrace();
-					Log.e(TAG, "getFlashMode exception: " + e.getMessage());
+					try
+					{
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+							return CameraController.key_flash.get(params.getFlashMode());
+					} catch (Exception e)
+					{
+						e.printStackTrace();
+						Log.e(TAG, "getFlashMode exception: " + e.getMessage());
+					}
 				}
-			}
+			} else
+				return appInterface.getFlashModePref(-1);
 		} else
-			return PreferenceManager.getDefaultSharedPreferences(mainContext).getInt(MainScreen.sFlashModePref, -1);
+		{
+			return CameraController.key_flash.get(SonyRemoteCamera.getFlashModeRemote());
+		}
 
 		return -1;
 	}
 
 	public static int getISOMode()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				Camera.Parameters params = camera.getParameters();
-				if (params != null)
+				if (camera != null)
 				{
-					String iso = null;
-					iso = params.get("iso");
-					if (iso == null)
-						iso = params.get("iso-speed");
+					Camera.Parameters params = camera.getParameters();
+					if (params != null)
+					{
+						String iso = null;
+						iso = params.get("iso");
+						if (iso == null)
+							iso = params.get("iso-speed");
 
-					if (CameraController.key_iso.containsKey(iso))
-						return CameraController.key_iso.get(iso);
-					else if (CameraController.key_iso2.containsKey(iso))
-						return CameraController.key_iso2.get(iso);
+						if (CameraController.key_iso.containsKey(iso))
+							return CameraController.key_iso.get(iso);
+						else if (CameraController.key_iso2.containsKey(iso))
+							return CameraController.key_iso2.get(iso);
+					}
 				}
-			}
+			} else
+				return appInterface.getISOModePref(-1);
 		} else
-			return PreferenceManager.getDefaultSharedPreferences(mainContext).getInt(MainScreen.sISOPref, -1);
+		{
+			return CameraController.key_iso2.get(SonyRemoteCamera.getIsoModeRemote());
+		}
 
 		return -1;
 	}
 
+	
+	//Method useful only in camera2 mode
+	//This is not just an ISO setting but current real-time ISO value of received preview frame
 	public static int getCurrentSensitivity()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			return -1;
+			if (!CameraController.isCamera2)
+			{
+				return -1;
+			} else
+			{
+				return Camera2Controller.getCameraCurrentSensitivityCamera2();
+			}
 		} else
 		{
-			return HALv3.getCameraCurrentSensitivityHALv3();
+			return -1;
 		}
 	}
 
 	public static void setCameraSceneMode(int mode)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
+					try
 					{
-						params.setSceneMode(CameraController.mode_scene.get(mode));
-						setCameraParameters(params);
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+						{
+							params.setSceneMode(CameraController.mode_scene.get(mode));
+							setCameraParameters(params);
+						}
+					} catch (Exception e)
+					{
+						e.printStackTrace();
 					}
-				} catch (Exception e)
-				{
-					e.printStackTrace();
 				}
-			}
-		} else
-			HALv3.setCameraSceneModeHALv3(mode);
+			} else
+				Camera2Controller.setCameraSceneModeCamera2(mode);
+		}
 	}
 
-	public static void setCameraWhiteBalance(int mode)
+	public static void setCameraWhiteBalanceMode(int mode)
 	{
-		if (!CameraController.isHALv3)
+		if (!isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
+					try
 					{
-						params.setWhiteBalance(CameraController.mode_wb.get(mode));
-						setCameraParameters(params);
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+						{
+							params.setWhiteBalance(CameraController.mode_wb.get(mode));
+							setCameraParameters(params);
+						}
+					} catch (Exception e)
+					{
+						e.printStackTrace();
 					}
-				} catch (Exception e)
-				{
-					e.printStackTrace();
 				}
-			}
+			} else
+				Camera2Controller.setCameraWhiteBalanceCamera2(mode);
 		} else
-			HALv3.setCameraWhiteBalanceHALv3(mode);
+		{
+			SonyRemoteCamera.setWhiteBalanceRemote(CameraController.mode_wb_sony_remote.get(mode));
+		}
+	}
+
+	@TargetApi(21)
+	public static void setCameraColorTemperature(int iTemp)
+	{
+		if (CameraController.isCamera2)
+			Camera2Controller.setCameraColorTemperatureCamera2(iTemp);
 	}
 
 	public static void setCameraFocusMode(int mode)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
+					try
 					{
-						String focusmode = CameraController.mode_focus.get(mode);
-						params.setFocusMode(focusmode);
-						setCameraParameters(params);
-						MainScreen.setAutoFocusLock(false);
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+						{
+							String focusmode = CameraController.mode_focus.get(mode);
+							params.setFocusMode(focusmode);
+							setCameraParameters(params);
+							appInterface.setAutoFocusLock(false);
+						}
+					} catch (Exception e)
+					{
+						e.printStackTrace();
 					}
-				} catch (Exception e)
-				{
-					e.printStackTrace();
 				}
-			}
+			} else
+				Camera2Controller.setCameraFocusModeCamera2(mode);
 		} else
-			HALv3.setCameraFocusModeHALv3(mode);
+		{
+			// sony
+		}
 	}
 
 	public static void setCameraFlashMode(final int mode)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					final Camera.Parameters params = camera.getParameters();
-					if (params != null)
+					try
 					{
-						String currentFlash = params.getFlashMode();
-						if (currentFlash.equals(flashTorch))
+						final Camera.Parameters params = camera.getParameters();
+						if (params != null)
 						{
-							params.setFlashMode(flashOff);
-							setCameraParameters(params);
-							Handler handler = new Handler();
-							handler.postDelayed(new Runnable()
+							String currentFlash = params.getFlashMode();
+
+							// Nothing to do, if newMode and currentMode are
+							// equals.
+							if (currentFlash.equals(CameraController.mode_flash.get(mode)))
 							{
-								@Override
-								public void run()
-								{
-									String flashmode = CameraController.mode_flash.get(mode);
-									params.setFlashMode(flashmode);
-									setCameraParameters(params);
-								}
-							}, 50);
-						} else
-						{
-							String flashmode = CameraController.mode_flash.get(mode);
-							if (flashmode == null)
 								return;
-							params.setFlashMode(flashmode);
-							setCameraParameters(params);
+							}
+
+							//Sometimes torch mode isn't canceled without switching to MODE_OFF.
+							//And that switching may take some time, so we used delayed setting of new mode
+							if (currentFlash.equals(flashTorch))
+							{
+								params.setFlashMode(flashOff);
+								setCameraParameters(params);
+								Handler handler = new Handler();
+								handler.postDelayed(new Runnable()
+								{
+									@Override
+									public void run()
+									{
+										String flashmode = CameraController.mode_flash.get(mode);
+										params.setFlashMode(flashmode);
+										setCameraParameters(params);
+									}
+								}, 50);
+							} else
+							{
+								String flashmode = CameraController.mode_flash.get(mode);
+								if (flashmode == null)
+									return;
+								params.setFlashMode(flashmode);
+								setCameraParameters(params);
+							}
 						}
+					} catch (Exception e)
+					{
+						e.printStackTrace();
 					}
-				} catch (Exception e)
-				{
-					e.printStackTrace();
 				}
-			}
+			} else
+				Camera2Controller.setCameraFlashModeCamera2(mode);
 		} else
-			HALv3.setCameraFlashModeHALv3(mode);
+		{
+			SonyRemoteCamera.setFlashModeRemote(CameraController.mode_flash.get(mode));
+		}
 	}
 
 	public static void setCameraISO(int mode)
 	{
-		if (!CameraController.isHALv3)
+		if (!isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					// boolean isSpecialDevice = Build.MODEL.contains("SM-N910")
-					// || Build.MODEL.contains("ALCATEL ONE TOUCH");
+					//ISO isn't documented by google, so quite all devices has different parameter names and values for ISO
+					//There we iterate all known options for ISO
 					Camera.Parameters params = camera.getParameters();
 					if (params != null)
 					{
@@ -2782,6 +3818,8 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 							params.set(CameraParameters.isoParam2, iso);
 						else if (params.get(CameraParameters.isoParam3) != null)
 							params.set(CameraParameters.isoParam3, iso);
+						else
+							params.set(CameraParameters.isoParam, iso);
 						if (!setCameraParameters(params))
 						{
 							iso = isUseISO2Keys ? CameraController.mode_iso.get(mode) : CameraController.mode_iso2
@@ -2792,19 +3830,23 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 								params.set(CameraParameters.isoParam2, iso);
 							else if (params.get(CameraParameters.isoParam3) != null)
 								params.set(CameraParameters.isoParam3, iso);
+							else
+								params.set(CameraParameters.isoParam, iso);
 
 							setCameraParameters(params);
 						}
 					}
-				} catch (Exception e)
-				{
-					e.printStackTrace();
 				}
-			}
+			} else
+				Camera2Controller.setCameraISOModeCamera2(mode);
 		} else
-			HALv3.setCameraISOModeHALv3(mode);
+		{
+			SonyRemoteCamera.setIsoSpeedRateRemote(CameraController.mode_iso2.get(mode));
+		}
 	}
 
+	
+	//May not work on all devices, coz it not documented by google
 	public static void setLumaAdaptation(int iEv)
 	{
 		try
@@ -2823,115 +3865,216 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	public static void setCameraExposureCompensation(int iEV)
 	{
-		if (!CameraController.isHALv3)
+		if (!isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
+					try
 					{
-						params.setExposureCompensation(iEV);
-						setCameraParameters(params);
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+						{
+							params.setExposureCompensation(iEV);
+							setCameraParameters(params);
+						}
+					} catch (Exception e)
+					{
+						e.printStackTrace();
 					}
-				} catch (Exception e)
-				{
-					e.printStackTrace();
 				}
-			}
+			} else
+				Camera2Controller.setCameraExposureCompensationCamera2(iEV);
 		} else
-			HALv3.setCameraExposureCompensationHALv3(iEV);
+		{
+			SonyRemoteCamera.setExposureCompensationRemote(iEV);
+		}
 
-		PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, PluginManager.MSG_EV_CHANGED);
+		sendMessage(ApplicationInterface.MSG_BROADCAST, ApplicationInterface.MSG_EV_CHANGED);
 	}
 
+	
+	//Manual exposure time available only in camera2 mode
 	public static void setCameraExposureTime(long iTime)
 	{
-		if (CameraController.isHALv3)
+		if (CameraController.isCamera2)
 		{
-			// isManualExposure = true;
-			HALv3.setCameraExposureTimeHALv3(iTime);
+			Camera2Controller.setCameraExposureTimeCamera2(iTime);
 		}
 	}
-	
+
 	public static long getCameraExposureTime()
 	{
-		if (!CameraController.isHALv3) {
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				return -1;
+			} else
+			{
+				return Camera2Controller.getCameraCurrentExposureCamera2();
+			}
+		} else
+		{
 			return -1;
-		} else {
-			return HALv3.getCameraCurrentExposureHALv3();
 		}
 	}
 
+	//Actually creates new preview request without metering areas
 	public static void resetCameraAEMode()
 	{
-		if (CameraController.isHALv3)
+		if (CameraController.isCamera2)
 		{
-			// isManualExposure = false;
-			HALv3.resetCameraAEModeHALv3();
+			Camera2Controller.resetCameraAEModeCamera2();
 		}
 	}
 
+	//Manual focus distance available only in camera2 mode
 	public static void setCameraFocusDistance(float fDistance)
 	{
-		if (CameraController.isHALv3)
+		if (CameraController.isCamera2)
 		{
-			// isManualFocus = true;
-			HALv3.setCameraFocusDistanceHALv3(fDistance);
+			Camera2Controller.setCameraFocusDistanceCamera2(fDistance);
 		}
 	}
-
-	// public static void resetCameraFocusDistance()
-	// {
-	// // if (CameraController.isHALv3)
-	// // isManualFocus = false;
-	// }
 
 	public static void setCameraFocusAreas(List<Area> focusAreas)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (CameraController.getCamera() != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (CameraController.getCamera() != null)
 				{
-					Camera.Parameters params = CameraController.getCameraParameters();
-					if (params != null)
+					try
 					{
-						params.setFocusAreas(focusAreas);
-						cameraController.setCameraParameters(params);
+						Camera.Parameters params = CameraController.getCameraParameters();
+						if (params != null)
+						{
+							params.setFocusAreas(focusAreas);
+							cameraController.setCameraParameters(params);
+						}
+					} catch (RuntimeException e)
+					{
+						Log.e(TAG, e.getMessage());
 					}
-				} catch (RuntimeException e)
-				{
-					Log.e(TAG, e.getMessage());
 				}
-			}
+			} else
+				Camera2Controller.setCameraFocusAreasCamera2(focusAreas);
 		} else
-			HALv3.setCameraFocusAreasHALv3(focusAreas);
+		{
+			SonyRemoteCamera.setCameraFocusAreasSonyRemote(focusAreas);
+		}
 	}
 
 	public static void setCameraMeteringAreas(List<Area> meteringAreas)
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (camera != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (camera != null)
 				{
-					Camera.Parameters params = camera.getParameters();
-					if (params != null)
+					try
 					{
-						params.setMeteringAreas(meteringAreas);
-						cameraController.setCameraParameters(params);
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+						{
+							params.setMeteringAreas(meteringAreas);
+							cameraController.setCameraParameters(params);
+						}
+					} catch (RuntimeException e)
+					{
+						Log.e(TAG, e.getMessage());
 					}
-				} catch (RuntimeException e)
-				{
-					Log.e(TAG, e.getMessage());
 				}
-			}
-		} else
-			HALv3.setCameraMeteringAreasHALv3(meteringAreas);
+			} else
+				Camera2Controller.setCameraMeteringAreasCamera2(meteringAreas);
+		}
+	}
+	
+	//Based on user's tap on screen information calculate appropriate drivers's coordinate for focusing or exposure metering
+	public static void calculateTapArea(int focusWidth, int focusHeight, float areaMultiple, int top, int left,
+			int previewWidth, int previewHeight, int xRaw, int yRaw, Matrix mMatrix, Rect rect)
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				int areaWidth = (int) (focusWidth * areaMultiple);
+				int areaHeight = (int) (focusHeight * areaMultiple);
+
+				int right = Util.clamp(left + areaWidth, areaWidth, previewWidth);
+				int bottom = Util.clamp(top + areaHeight, areaHeight, previewHeight);
+
+				RectF rectF = new RectF(left, top, right, bottom);
+				mMatrix.mapRect(rectF);
+				Util.rectFToRect(rectF, rect);
+
+				if (rect.left < -1000)
+					rect.left = -1000;
+				if (rect.left > 1000)
+					rect.left = 1000;
+
+				if (rect.right < -1000)
+					rect.right = -1000;
+				if (rect.right > 1000)
+					rect.right = 1000;
+
+				if (rect.top < -1000)
+					rect.top = -1000;
+				if (rect.top > 1000)
+					rect.top = 1000;
+
+				if (rect.bottom < -1000)
+					rect.bottom = -1000;
+				if (rect.bottom > 1000)
+					rect.bottom = 1000;
+			} else
+				Camera2Controller.calculateTapArea(focusWidth, focusHeight, areaMultiple, top, left,
+						previewWidth, previewHeight, xRaw, yRaw, rect);
+		}		
+	}
+	
+	//Based on user's tap on screen information calculate appropriate drivers's coordinate for focusing or exposure metering
+	public static Rect getSensorCoordinates(Rect rect)
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				RectF rectF = new RectF(rect.left, rect.top, rect.right, rect.bottom);
+				Matrix meteringMatrix = Util.getMeteringMatrix();
+				meteringMatrix.mapRect(rectF);
+				Util.rectFToRect(rectF, rect);
+
+				if (rect.left < -1000)
+					rect.left = -1000;
+				if (rect.left > 1000)
+					rect.left = 1000;
+
+				if (rect.right < -1000)
+					rect.right = -1000;
+				if (rect.right > 1000)
+					rect.right = 1000;
+
+				if (rect.top < -1000)
+					rect.top = -1000;
+				if (rect.top > 1000)
+					rect.top = 1000;
+
+				if (rect.bottom < -1000)
+					rect.bottom = -1000;
+				if (rect.bottom > 1000)
+					rect.bottom = 1000;
+
+				return rect;
+			} else
+				return Camera2Controller.getSensorCoordinates(rect);
+		}
+		else
+			return null;
 	}
 
 	public static void setFocusState(int state)
@@ -2942,7 +4085,37 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 		mFocusState = state;
 
-		PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, PluginManager.MSG_FOCUS_STATE_CHANGED);
+		sendMessage(ApplicationInterface.MSG_BROADCAST, ApplicationInterface.MSG_FOCUS_STATE_CHANGED);
+	}
+
+	public static void setCameraColorEffect(int effect)
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				if (camera != null)
+				{
+					try
+					{
+						Camera.Parameters params = camera.getParameters();
+						if (params != null)
+						{
+							String collorEffect = CameraController.mode_color_effect.get(effect);
+							params.setColorEffect(collorEffect);
+							setCameraParameters(params);
+						}
+					} catch (Exception e)
+					{
+						e.printStackTrace();
+					}
+				}
+			} else
+				Camera2Controller.setCameraCollorEffectCamera2(effect);
+		} else
+		{
+			// Nothing to do for Sony
+		}
 	}
 
 	public static int getFocusState()
@@ -2950,47 +4123,72 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		return mFocusState;
 	}
 
+	
+	//Method used by capture plugins after shutter button click performed to decide
+	//to start image capturing or to wait onAutoFocus callback will be called
+	//Logic is not reliable in general but works in current OpenCamera code
 	public static boolean isAutoFocusPerform()
 	{
 		int focusMode = CameraController.getFocusMode();
 		if (CameraController.isFocusModeSupported()
-				&& focusMode != -1
-				&& (CameraController.getFocusState() == CameraController.FOCUS_STATE_IDLE || CameraController
-						.getFocusState() == CameraController.FOCUS_STATE_FOCUSING)
-				&& !(focusMode == CameraParameters.AF_MODE_CONTINUOUS_PICTURE
-						|| focusMode == CameraParameters.AF_MODE_CONTINUOUS_VIDEO
-						|| focusMode == CameraParameters.AF_MODE_INFINITY
-						|| focusMode == CameraParameters.AF_MODE_FIXED || focusMode == CameraParameters.AF_MODE_EDOF || focusMode == CameraParameters.MF_MODE)
-				&& !MainScreen.getAutoFocusLock()/*
-												 * && !isManualFocus &&
-												 * !isManualExposure
-												 */)
+			&& (CameraController.getFocusState() == CameraController.FOCUS_STATE_IDLE
+				|| CameraController.getFocusState() == CameraController.FOCUS_STATE_FOCUSING)
+			&& !(focusMode == CameraParameters.AF_MODE_UNSUPPORTED
+				 || focusMode == CameraParameters.AF_MODE_CONTINUOUS_PICTURE
+				 || focusMode == CameraParameters.AF_MODE_CONTINUOUS_VIDEO
+				 || focusMode == CameraParameters.AF_MODE_INFINITY
+				 || focusMode == CameraParameters.AF_MODE_FIXED
+				 || focusMode == CameraParameters.AF_MODE_EDOF
+				 || focusMode == CameraParameters.MF_MODE)
+				&& !ApplicationScreen.instance.getAutoFocusLock())
 			return true;
 		else
 			return false;
 	}
 
+	public static void setPreviewFrameRate(int frameRate)
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				if (camera != null && CameraController.getCameraParameters() != null)
+				{
+					Camera.Parameters cp = CameraController.getCameraParameters();
+					cp.setPreviewFrameRate(frameRate);
+					CameraController.setCameraParameters(cp);
+				}
+			}
+		}
+	}
+	
 	public static int getPreviewFrameRate()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isCamera2)
 		{
 			int[] range = { 0, 0 };
 			camera.getParameters().getPreviewFpsRange(range);
 			return range[1] / 1000;
 		} else
-			return HALv3.getPreviewFrameRateHALv3();
+			return Camera2Controller.getPreviewFrameRateCamera2();
 	}
 
 	public static void setPictureSize(int width, int height)
 	{
-		final Camera.Parameters cp = getCameraParameters();
-		if (cp == null)
+		if (!CameraController.isRemoteCamera())
 		{
-			return;
-		}
+			final Camera.Parameters cp = getCameraParameters();
+			if (cp == null)
+			{
+				return;
+			}
 
-		cp.setPictureSize(width, height);
-		setCameraParameters(cp);
+			cp.setPictureSize(width, height);
+			setCameraParameters(cp);
+		} else
+		{
+			SonyRemoteCamera.setPictureSizeRemote(width, height);
+		}
 	}
 
 	public static void setJpegQuality(int quality)
@@ -3005,14 +4203,14 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		setCameraParameters(cp);
 	}
 
+	
+	//All constant values collected experimentally
 	public static float getHorizontalViewAngle()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isCamera2)
 		{
 			// LG G Flex 2.
-			if (Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h959")
-					|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h510")
-					|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-f510k"))
+			if (CameraController.isFlex2 /*|| CameraController.isG4*/)
 			{
 				return 60.808907f;
 			}
@@ -3021,23 +4219,23 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				return camera.getParameters().getHorizontalViewAngle();
 		} else
 		{
-			return HALv3.getHorizontalViewAngle();
+			return Camera2Controller.getHorizontalViewAngle();
 		}
 
-		if (Build.MODEL.contains("Nexus"))
+		if (CameraController.isNexus)
 			return 59.63f;
 
+		//Default value
 		return 55.4f;
 	}
 
+	//All constant values collected experimentally
 	public static float getVerticalViewAngle()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isCamera2)
 		{
 			// LG G Flex 2.
-			if (Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h959")
-					|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-h510")
-					|| Build.MODEL.toLowerCase(Locale.US).replace(" ", "").contains("lg-f510k"))
+			if (CameraController.isFlex2 /*|| CameraController.isG4*/)
 			{
 				return 47.50866f;
 			}
@@ -3046,32 +4244,44 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 				return camera.getParameters().getVerticalViewAngle();
 		} else
 		{
-			return HALv3.getVerticalViewAngle();
+			return Camera2Controller.getVerticalViewAngle();
 		}
 
-		if (Build.MODEL.contains("Nexus"))
+		if (CameraController.isNexus)
 			return 46.66f;
 
+		//Default value
 		return 42.7f;
 	}
 
-	public static int getSensorOrientation()
+	public static int getSensorOrientation(int cameraIndex)
 	{
-		if (!CameraController.isHALv3)
+		if (!isRemoteCamera())
 		{
-			Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
-			Camera.getCameraInfo(CameraIndex, cameraInfo);
-			return cameraInfo.orientation;
+			if (!CameraController.isCamera2)
+			{
+				Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
+				Camera.getCameraInfo(CameraIndex, cameraInfo);
+				return cameraInfo.orientation;
+			} else
+				return Camera2Controller.getInstance().getSensorOrientation(cameraIndex);
 		} else
-			return HALv3.getInstance().getSensorOrientation();
+		{
+			return -1;
+		}
 	}
-
-	// ^^^^^^^^^^^ CAMERA PARAMETERS AND CAPABILITIES
+	
+	public static int getSensorOrientation(boolean cameraMirrored)
+	{
+		return getSensorOrientation(cameraMirrored? 1 : 0);
+	}
+	
+	// CAMERA PARAMETERS AND CAPABILITIES
 	// SECTION---------------------------------------------
 
 	// ------------ CAPTURE AND FOCUS FUNCTION ----------------------------
 
-	// Experimental code to take multiple images. Works only with HALv3
+	// Experimental code to take multiple images. Works only with camera2
 	// interface in API 19(currently minimum API version for Android L increased
 	// to 21)
 	protected static int[]		pauseBetweenShots	= null;
@@ -3087,12 +4297,33 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	protected static boolean	resultInHeap		= false;
 
-	protected static boolean	playShutterSound	= false;
+	protected static boolean	indicateCapturing	= false;
 
+	public static void startVideoRecordingSonyRemote()
+	{
+		SonyRemoteCamera.startMovieRec();
+	}
+
+	public static void stopVideoRecordingSonyRemote()
+	{
+		SonyRemoteCamera.stopMovieRec();
+	}
+
+	public static void configureMediaRecorder(MediaRecorder mediaRecorder)
+	{
+		if (!CameraController.isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				mediaRecorder.setCamera(camera);		
+			}
+		}
+	}
+	
 	// Note: per-frame 'gain' and 'exposure' parameters are only effective for
 	// Camera2 API at the moment
 	public static int captureImagesWithParams(int nFrames, int format, int[] pause, int[] evRequested, int[] gain,
-			long[] exposure, boolean resInHeap, boolean playSound)
+			long[] exposure, boolean setPowerGamma, boolean resInHeap, boolean indicate)
 	{
 		pauseBetweenShots = pause;
 		evValues = evRequested;
@@ -3106,58 +4337,57 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		previewWorking = false;
 		cdt = null;
 
-		playShutterSound = playSound;
+		indicateCapturing = indicate;
 
-		if (!CameraController.isHALv3)
+		if (!isRemoteCamera())
+		{
+			if (!CameraController.isCamera2)
+			{
+				if (appInterface.getFlashModePref(ApplicationScreen.sDefaultFlashValue) == CameraParameters.FLASH_MODE_CAPTURE_TORCH)
+				{
+					// If current flash mode is FLASH_MODE_CAPTURE_TORCH, then turn on torch before capturing.
+					CameraController.setCameraFlashMode(CameraParameters.FLASH_MODE_TORCH);
+				}
+				
+				takeYUVFrame = (format == CameraController.YUV) || (format == CameraController.YUV_RAW);
+				if (evRequested != null && evRequested.length >= total_frames)
+					CameraController.setExposure();
+				else
+				{
+					if (CameraController.getFocusMode() == CameraParameters.AF_MODE_CONTINUOUS_PICTURE)
+					{
+						//In that way we avoid blurred image if continuous focus will perform during frame capturing
+						camera.autoFocus(new AutoFocusCallback()
+						{
+							@Override
+							public void onAutoFocus(boolean success, Camera camera)
+							{
+								CameraController.takeImage();
+							}
+						});
+					} else
+					{
+						CameraController.takeImage();
+					}
+				}
+				return 0;
+			} else
+				return Camera2Controller.captureImageWithParamsCamera2(nFrames, format, pause, evRequested, gain, exposure, setPowerGamma,
+						resultInHeap, indicateCapturing);
+		} else
 		{
 			takeYUVFrame = (format == CameraController.YUV) || (format == CameraController.YUV_RAW);
-			if (evRequested != null && evRequested.length >= total_frames)
-				CameraController.setExposure();
-			else {
-				if (CameraController.getFocusMode() == CameraParameters.AF_MODE_CONTINUOUS_PICTURE) {
-					camera.autoFocus(new AutoFocusCallback()
-					{
-						@Override
-						public void onAutoFocus(boolean success, Camera camera)
-						{
-							CameraController.takeImage();
-						}
-					});
-				} else {
-					CameraController.takeImage();
-				}
-			}
+			CameraController.takeImageSonyRemote();
 			return 0;
-		} else
-			return HALv3.captureImageWithParamsHALv3(nFrames, format, pause, evRequested, gain, exposure, resultInHeap,
-					playShutterSound);
+		}
 	}
 
-	public static boolean autoFocus(Camera.AutoFocusCallback listener)
+	//Used to 'lock' focus for next plugin's internal logic
+	public static void forceFocus()
 	{
-		synchronized (SYNC_OBJECT)
+		if (CameraController.isCamera2)
 		{
-			if (!CameraController.isHALv3)
-			{
-				if (CameraController.getCamera() != null
-						&& CameraController.mCaptureState != CameraController.CAPTURE_STATE_CAPTURING)
-				{
-					CameraController.setFocusState(CameraController.FOCUS_STATE_FOCUSING);
-					try
-					{
-						CameraController.getCamera().autoFocus(listener);
-					} catch (Exception e)
-					{
-						e.printStackTrace();
-						Log.e(TAG, "autoFocus: " + e.getMessage());
-						return false;
-					}
-					return true;
-				}
-			} else
-				return HALv3.autoFocusHALv3();
-
-			return false;
+			Camera2Controller.forceFocusCamera2();
 		}
 	}
 
@@ -3165,28 +4395,40 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	{
 		synchronized (SYNC_OBJECT)
 		{
-			if (!CameraController.isHALv3)
+			if (!CameraController.isRemoteCamera())
 			{
-				if (CameraController.getCamera() != null)
+				if (!CameraController.isCamera2)
 				{
-					if (CameraController.mCaptureState != CameraController.CAPTURE_STATE_CAPTURING)
+					if (CameraController.getCamera() != null)
 					{
-						CameraController.setFocusState(CameraController.FOCUS_STATE_FOCUSING);
-						try
+						if (CameraController.mCaptureState != CameraController.CAPTURE_STATE_CAPTURING)
 						{
-							Camera.Parameters params = CameraController.getCameraParameters();
-							CameraController.getCamera().autoFocus(CameraController.getInstance());
-						} catch (Exception e)
-						{
-							e.printStackTrace();
-							Log.e(TAG, "autoFocus: " + e.getMessage());
-							return false;
+							CameraController.setFocusState(CameraController.FOCUS_STATE_FOCUSING);
+							try
+							{
+								Camera.Parameters params = CameraController.getCameraParameters();
+								CameraController.getCamera().autoFocus(CameraController.getInstance());
+							} catch (Exception e)
+							{
+								e.printStackTrace();
+								Log.e(TAG, "autoFocus: " + e.getMessage());
+								return false;
+							}
+							return true;
 						}
-						return true;
 					}
-				}
+				} else
+					return Camera2Controller.autoFocusCamera2();
 			} else
-				return HALv3.autoFocusHALv3();
+			{
+				if (CameraController.getFocusState() == CameraController.FOCUS_STATE_IDLE
+						|| CameraController.getFocusState() == CameraController.FOCUS_STATE_FOCUSED
+						|| CameraController.getFocusState() == CameraController.FOCUS_STATE_FAIL)
+				{
+					CameraController.setFocusState(CameraController.FOCUS_STATE_FOCUSING);
+					return SonyRemoteCamera.autoFocusSonyRemote();
+				}
+			}
 
 			return false;
 		}
@@ -3195,20 +4437,77 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	public static void cancelAutoFocus()
 	{
 		CameraController.setFocusState(CameraController.FOCUS_STATE_IDLE);
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			if (CameraController.getCamera() != null)
+			if (!CameraController.isCamera2)
 			{
-				try
+				if (CameraController.getCamera() != null)
 				{
-					camera.cancelAutoFocus();
-				} catch (RuntimeException exp)
-				{
-					Log.e(TAG, "cancelAutoFocus failed. Message: " + exp.getMessage());
+					try
+					{
+						camera.cancelAutoFocus();
+					} catch (RuntimeException exp)
+					{
+						Log.e(TAG, "cancelAutoFocus failed. Message: " + exp.getMessage());
+					}
 				}
+			} else
+				Camera2Controller.cancelAutoFocusCamera2();
+		} else
+		{
+			SonyRemoteCamera.cancelAutoFocusSonyRemote();
+		}
+	}
+	
+	
+	public static void setFocusIdle()
+	{
+		CameraController.setFocusState(CameraController.FOCUS_STATE_IDLE);
+		//Galaxy S7 has a very bad auto focus, we have to call cancel auto focus to prevent unfocused still images
+		if (CameraController.isCamera2 && CameraController.isGalaxyS7)
+			Camera2Controller.cancelAutoFocusCamera2();
+	}
+
+	// Callback always contains JPEG frame.
+	// So, we have to convert JPEG to YUV if capture plugin has requested YUV
+	// frame.
+	@Override
+	public void onPictureTakenSonyRemote(byte[] paramArrayOfByte, boolean fromRequest)
+	{
+		if (fromRequest)
+		{
+			pluginManager.collectExifData(paramArrayOfByte);
+			if (!CameraController.takeYUVFrame) // if JPEG frame requested
+			{
+				int frame = 0;
+				if (resultInHeap)
+					frame = SwapHeap.SwapToHeap(paramArrayOfByte);
+				pluginManager.onImageTaken(frame, paramArrayOfByte, paramArrayOfByte.length, CameraController.JPEG);
+			} else
+			// is YUV frame requested
+			{
+				int yuvFrame = ImageConversion.JpegConvert(paramArrayOfByte, imageSize.getWidth(),
+						imageSize.getHeight(), false, false, 0);
+				int frameLen = imageSize.getWidth() * imageSize.getHeight() + 2 * ((imageSize.getWidth() + 1) / 2)
+						* ((imageSize.getHeight() + 1) / 2);
+
+				byte[] frameData = null;
+				if (!resultInHeap)
+				{
+					frameData = SwapHeap.SwapFromHeap(yuvFrame, frameLen);
+					yuvFrame = 0;
+				}
+
+				pluginManager.onImageTaken(yuvFrame, frameData, frameLen, CameraController.YUV);
 			}
 		} else
-			HALv3.cancelAutoFocusHALv3();
+		{
+			pluginManager.collectExifData(paramArrayOfByte);
+			int frame = SwapHeap.SwapToHeap(paramArrayOfByte);
+			pluginManager.onImageTaken(frame, paramArrayOfByte, paramArrayOfByte.length, CameraController.JPEG);
+		}
+
+		CameraController.mCaptureState = CameraController.CAPTURE_STATE_IDLE;
 	}
 
 	// Callback always contains JPEG frame.
@@ -3217,14 +4516,11 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 	@Override
 	public void onPictureTaken(byte[] paramArrayOfByte, Camera paramCamera)
 	{
-		Log.d(TAG, "onPictureTaken");
-		CameraController.getCamera().setPreviewCallbackWithBuffer(CameraController.getInstance());
-		CameraController.getCamera().addCallbackBuffer(pviewBuffer);
+		CameraController.setPreviewCallbackWithBuffer();
 
-		pluginManager.addToSharedMemExifTags(paramArrayOfByte);
+		pluginManager.collectExifData(paramArrayOfByte);
 		if (!CameraController.takeYUVFrame) // if JPEG frame requested
 		{
-
 			int frame = 0;
 			if (resultInHeap)
 				frame = SwapHeap.SwapToHeap(paramArrayOfByte);
@@ -3232,12 +4528,19 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		} else
 		// is YUV frame requested
 		{
-			// new DecodeToYUVFrameTask().execute(paramArrayOfByte);
-
-			int yuvFrame = ImageConversion.JpegConvert(paramArrayOfByte, imageSize.getWidth(), imageSize.getHeight(),
-					false, false, 0);
-			int frameLen = imageSize.getWidth() * imageSize.getHeight() + 2 * ((imageSize.getWidth() + 1) / 2)
-					* ((imageSize.getHeight() + 1) / 2);
+			int w,h;
+			if (motozChangeResolution)
+			{
+				w = imageSize.getWidth()==1944?1936:imageSize.getWidth();
+				h = imageSize.getHeight()==1944?1936:imageSize.getHeight();
+			}
+			else
+			{
+				w = imageSize.getWidth();
+				h = imageSize.getHeight();
+			}
+			int yuvFrame = ImageConversion.JpegConvert(paramArrayOfByte, w, h, false, false, 0);
+			int frameLen = w * h + 2 * ((w + 1) / 2) * ((h + 1) / 2);
 
 			byte[] frameData = null;
 			if (!resultInHeap)
@@ -3247,21 +4550,6 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			}
 
 			pluginManager.onImageTaken(yuvFrame, frameData, frameLen, CameraController.YUV);
-
-			// int yuvFrame = ImageConversion.JpegConvert(paramArrayOfByte,
-			// imageSize.getWidth(),
-			// imageSize.getHeight(), false, false, 0);
-			// int frameLen = imageSize.getWidth() * imageSize.getHeight() + 2
-			// * ((imageSize.getWidth() + 1) / 2) * ((imageSize.getHeight() + 1)
-			// / 2);
-			//
-			// byte[] frameData = null;
-			// if (!resultInHeap)
-			// {
-			// frameData = SwapHeap.SwapFromHeap(yuvFrame, frameLen);
-			// yuvFrame = 0;
-			// }
-			// pluginManager.onImageTaken(yuvFrame, frameData, frameLen, true);
 		}
 
 		try
@@ -3269,8 +4557,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			CameraController.startCameraPreview();
 		} catch (RuntimeException e)
 		{
-			MainScreen.getMessageHandler().sendEmptyMessage(PluginManager.MSG_EXPORT_FINISHED_IOEXCEPTION);
-			MainScreen.getInstance().muteShutter(false);
+			appInterface.captureFailed();
 			CameraController.mCaptureState = CameraController.CAPTURE_STATE_IDLE;
 			return;
 		}
@@ -3278,8 +4565,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 		nextFrame();
 
-		String modeID = PluginManager.getInstance().getActiveModeID();
-		if ((modeID.equals("hdrmode") || modeID.equals("expobracketing")) && (frame_num < total_frames))
+		if (pluginManager.isPreviewDependentMode() && (frame_num < total_frames))
 		{
 			// if preview not working
 			if (previewMode == false)
@@ -3298,50 +4584,13 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 					{
 						Log.d(TAG, "previewMode DISABLED!");
 						previewMode = false;
-						SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen
-								.getMainContext());
-						Editor prefsEditor = prefs.edit();
-						prefsEditor.putBoolean(MainScreen.sExpoPreviewModePref, false);
-						prefsEditor.commit();
+						appInterface.setExpoPreviewPref(previewMode);
 						evLatency = 0;
 						CameraController.takeImage();
 					}
 				}
 			};
 			cdt.start();
-		}
-	}
-
-	private class DecodeToYUVFrameTask extends AsyncTask<byte[], Void, Void>
-	{
-		int		yuvFrame	= 0;
-		int		frameLen	= 0;
-		byte[]	frameData	= null;
-
-		@Override
-		protected Void doInBackground(byte[]... params)
-		{
-			byte[] paramArrayOfByte = params[0];
-			yuvFrame = ImageConversion.JpegConvert(paramArrayOfByte, imageSize.getWidth(), imageSize.getHeight(),
-					false, false, 0);
-			frameLen = imageSize.getWidth() * imageSize.getHeight() + 2 * ((imageSize.getWidth() + 1) / 2)
-					* ((imageSize.getHeight() + 1) / 2);
-
-			frameData = null;
-			if (!resultInHeap)
-			{
-				frameData = SwapHeap.SwapFromHeap(yuvFrame, frameLen);
-				yuvFrame = 0;
-			}
-
-			// pluginManager.onImageTaken(yuvFrame, frameData, frameLen, true);
-			return null;
-		}
-
-		@Override
-		protected void onPostExecute(Void result)
-		{
-			pluginManager.onImageTaken(yuvFrame, frameData, frameLen, CameraController.YUV);
 		}
 	}
 
@@ -3373,12 +4622,16 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			CameraController.setFocusState(CameraController.FOCUS_STATE_FAIL);
 	}
 
+	//Callback for preview frame in camera1 mode
 	@Override
 	public void onPreviewFrame(byte[] data, Camera camera)
 	{
 		pluginManager.onPreviewFrame(data);
-		CameraController.getCamera().addCallbackBuffer(pviewBuffer);
+		if(pviewBuffer != null)
+			CameraController.getCamera().addCallbackBuffer(pviewBuffer);
 
+		//If capture plugin request image with size equals size of preview frame
+		//These tricky logic isn't affects capture plugin. It still request and received image as usual
 		if (takePreviewFrame)
 		{
 			takePreviewFrame = false;
@@ -3392,26 +4645,23 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 					data = null;
 				}
 
-				pluginManager.addToSharedMemExifTags(null);
+				pluginManager.collectExifData(null);
 				pluginManager.onImageTaken(frame, data, dataLenght, CameraController.YUV);
 			} else
 			{
 				int jpegData = 0;
-				// int yuvFrame = ImageConversion.JpegConvert(paramArrayOfByte,
-				// imageSize.getWidth(), imageSize.getHeight(),
-				// false, false, 0);
-				// pluginManager.onImageTaken(yuvFrame, null, 0, true);
 			}
-
-			// pluginManager.onPictureTaken(data, true);
 			nextFrame();
 			return;
 		}
 
-		String modeID = PluginManager.getInstance().getActiveModeID();
-		if ((modeID.equals("hdrmode") || modeID.equals("expobracketing")) && evLatency > 0)
+		//Actually this part of code is used by Expo-bracketing plugin
+		//to decide when exposure is changed and plugin may capture next
+		//frame with adjusted exposure - decision depends on number of preview frames
+		//have elapsed since setting new exposure value for camera
+		if (pluginManager.isPreviewDependentMode() && evLatency > 0)
 		{
-			Log.d(TAG, "evLatency = " + evLatency);
+			//Log.d(TAG, "evLatency = " + evLatency);
 			previewWorking = true;
 
 			if (--evLatency == 0)
@@ -3427,13 +4677,32 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		}
 	}
 
+	//The purpose of this method is to improve preview efficiency and frame rate by allowing preview 
+	//frame memory reuse. Valid only for camera1 mode
 	public static void setPreviewCallbackWithBuffer()
 	{
-		if (!CameraController.isHALv3)
+		if (!CameraController.isRemoteCamera())
 		{
-			CameraController.getCamera().setPreviewCallbackWithBuffer(CameraController.getInstance());
-			CameraController.getCamera().addCallbackBuffer(CameraController.pviewBuffer);
+			if (!CameraController.isCamera2)
+			{
+				//If preview buffer are allocated use preview callback with buffer
+				//instead use preview callback without buffer - it may to slow preview frame rate
+				if(CameraController.pviewBuffer != null)
+				{
+					CameraController.getCamera().setPreviewCallbackWithBuffer(CameraController.getInstance());
+					CameraController.getCamera().addCallbackBuffer(CameraController.pviewBuffer);
+				}
+				else
+					CameraController.getCamera().setPreviewCallback(CameraController.getInstance());
+			}
 		}
+	}
+
+	// Check if plugins require preview frames and configure preview surface in proper way.
+	public static void checkNeedPreviewFrame()
+	{
+		if (CameraController.isUseCamera2())
+			Camera2Controller.checkNeedPreviewFrame();
 	}
 
 	// ^^^^^^^^^^^^^ CAPTURE AND FOCUS FUNCTION ----------------------------
@@ -3465,6 +4734,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	// ^^^^^^^^^^^^^^^^^^^^^ Image data manipulation ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+	//Internal CC class for Size. Used instead of camera.Size class to support both camera1 and camera2 modes.
 	public static class Size
 	{
 		private int	mWidth;
@@ -3519,51 +4789,30 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static void takeImage()
 	{
-		Log.e(TAG, "takeImage called");
 		synchronized (SYNC_OBJECT)
 		{
 			if (imageSize == null)
 			{
-				PluginManager.getInstance().sendMessage(PluginManager.MSG_CAPTURE_FINISHED_NORESULT, null);
+				sendMessage(ApplicationInterface.MSG_CAPTURE_FINISHED_NORESULT, null);
 				return;
 			}
 
 			int imageWidth = imageSize.getWidth();
 			int imageHeight = imageSize.getHeight();
-			int previewWidth = MainScreen.getPreviewWidth();
-			int previewHeight = MainScreen.getPreviewHeight();
 
 			// play tick sound
-			MainScreen.getGUIManager().showCaptureIndication();
-			if (playShutterSound)
-				MainScreen.getInstance().playShutter();
+			appInterface.showCaptureIndication(indicateCapturing);
 
 			lastCaptureStarted = SystemClock.uptimeMillis();
-			if (imageWidth == previewWidth && imageHeight == previewHeight
-					&& ((frameFormat == CameraController.YUV) || (frameFormat == CameraController.YUV_RAW)))
-			{
-				if (CameraController.getFlashMode() == CameraParameters.FLASH_MODE_SINGLE)
-				{
-					// Turn on torch to emulate flash for preview images.
-					CameraController.setCameraFlashMode(CameraParameters.FLASH_MODE_TORCH);
-					Handler handler = new Handler();
-					handler.postDelayed(new Runnable()
-					{
-						@Override
-						public void run()
-						{
-							takePreviewFrame = true;
-
-						}
-					}, 500);
-				} else
-				{
-					takePreviewFrame = true; // Temporary make capture by
-					// preview frames only for YUV
-					// requests to avoid slow YUV to
-					// JPEG conversion
-				}
-			} else if (camera != null && CameraController.getFocusState() != CameraController.FOCUS_STATE_FOCUSING)
+			if (imageWidth == iPreviewWidth 
+				&& imageHeight == iPreviewHeight 
+				&& ((frameFormat == CameraController.YUV) || (frameFormat == CameraController.YUV_RAW))
+			   )
+				takePreviewFrame = true; // Temporary make capture by
+											// preview frames only for YUV
+											// requests to avoid slow YUV to
+											// JPEG conversion
+			else if (camera != null && CameraController.getFocusState() != CameraController.FOCUS_STATE_FOCUSING)
 			{
 				try
 				{
@@ -3588,8 +4837,6 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 
 	private static void nextFrame()
 	{
-		Log.d(TAG, "MSG_NEXT_FRAME");
-		String modeID2 = PluginManager.getInstance().getActiveModeID();
 		if (++frame_num < total_frames)
 		{
 			if (pauseBetweenShots == null || Array.getLength(pauseBetweenShots) < frame_num)
@@ -3611,7 +4858,7 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 					}
 				}, pauseBetweenShots[frame_num] - (SystemClock.uptimeMillis() - lastCaptureStarted));
 			}
-		} else if (modeID2.equals("hdrmode") || modeID2.equals("expobracketing"))
+		} else if (pluginManager.isPreviewDependentMode())
 		{
 			previewWorking = true;
 			if (cdt != null)
@@ -3622,15 +4869,12 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		}
 	}
 
+	
+	//Used by Expo-bracketing mode to allow device complete exposure changing before capturing starts
 	private static void setExposure()
 	{
 		try
 		{
-			// Note: LumaAdaptation is obsolete and unlikely to be relevant for
-			// Android >= 4.0
-			// if (UseLumaAdaptation && LumaAdaptationAvailable)
-			// CameraController.setLumaAdaptation(evValues[frame_num]);
-			// else
 			if (evValues != null && evValues.length > frame_num)
 				CameraController.setCameraExposureCompensation(evValues[frame_num]);
 		} catch (RuntimeException e)
@@ -3638,17 +4882,16 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 			Log.e(TAG, "setExpo fail in MSG_SET_EXPOSURE");
 		}
 
-		String modeID = PluginManager.getInstance().getActiveModeID();
-		if ((modeID.equals("hdrmode") || modeID.equals("expobracketing")) && previewMode)
+		if (pluginManager.isPreviewDependentMode() && previewMode)
 		{
 			SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mainContext);
 			// if true - evLatency will be doubled.
 			boolean isSlow = prefs.getBoolean("PreferenceExpoSlow", false);
 
-			// Note 3 & LG G3 need more time to change exposure.
-			if (Build.MODEL.contains("SM-N900") || Build.MODEL.contains("SM-N910"))
+			// Note 3 (and probably 4) & LG G3 need more time to change exposure.
+			if (CameraController.isGalaxyNote3 || CameraController.isGalaxyNote4)
 				evLatency = 20 * (isSlow ? 2 : 1);
-			else if (Build.MODEL.contains("LG-D855"))
+			else if (CameraController.isG3)
 				evLatency = 30 * (isSlow ? 2 : 1);
 			else
 			{
@@ -3675,4 +4918,64 @@ public class CameraController implements Camera.PictureCallback, Camera.AutoFocu
 		}
 	}
 
+	private static void takeImageSonyRemote()
+	{
+		Log.e(TAG, "takeImage called");
+		synchronized (SYNC_OBJECT)
+		{
+			if (imageSize == null)
+			{
+				sendMessage(ApplicationInterface.MSG_CAPTURE_FINISHED_NORESULT, null);
+				return;
+			}
+
+			int imageWidth = imageSize.getWidth();
+			int imageHeight = imageSize.getHeight();
+
+			// play tick sound
+			appInterface.showCaptureIndication(indicateCapturing);
+
+			lastCaptureStarted = SystemClock.uptimeMillis();
+
+			mCaptureState = CameraController.CAPTURE_STATE_CAPTURING;
+			// camera.setPreviewCallback(null);
+			SonyRemoteCamera.takePicture(CameraController.getInstance());
+		}
+	}
+
+	public static void sendMessage(int what, int arg1)
+	{
+		Message message = new Message();
+		message.arg1 = arg1;
+		message.what = what;
+		messageHandler.sendMessage(message);
+	}
+
+	public static void sendMessage(int what, String obj)
+	{
+		Message message = new Message();
+		message.obj = String.valueOf(obj);
+		message.what = what;
+		messageHandler.sendMessage(message);
+	}
+
+	/**
+	 * Sets a target ServerDevice object.
+	 * 
+	 * @param device
+	 */
+	public static void setTargetServerDevice(ServerDevice device)
+	{
+		SonyRemoteCamera.setTargetServerDevice(device);
+	}
+
+	/**
+	 * Returns a target ServerDevice object.
+	 * 
+	 * @return return ServiceDevice
+	 */
+	public static ServerDevice getTargetServerDevice()
+	{
+		return SonyRemoteCamera.getTargetServerDevice();
+	}
 }

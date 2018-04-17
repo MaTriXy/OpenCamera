@@ -15,7 +15,16 @@
     <string name="pref_advanced_saving_saveToPref_title">Сохранить как...</string>
     <string name="pref_advanced_saving_saveToPref_summary">Выбрать место для сохранения снимков</string>
     <string name="choose_folder">Выбрать папку</string>
+    <string name="camera_permission_rationaly_title">Доступа к камере</string>
+    <string name="camera_permission_rationaly_message">Приложение не может быть использовано пока нет доступа к камере устройства. Камера не может быть запущена.</string>
+    <string name="location_permission_rationaly_title">Доступ к геолокации</string>
+    <string name="location_permission_rationaly_message">Приложение не может сохранять геотеги без доступа к геолокации.</string>
+    <string name="microphone_permission_rationaly_title">Доступ к микрофону</string>
+    <string name="microphone_permission_rationaly_message">Записанные видео не будут содержать аудио трека, если у приложения нет доступа к микрофону.</string>
+    <string name="storage_permission_rationaly_title">Доступ к памяти</string>
+    <string name="storage_permission_rationaly_message">Приложение не может быть использовано пока нет доступа к памяти девайса. Снятые изображения и видео не будут сохранены.</string>
     <string name="pref_advanced_saving_saveToPref_CantSaveToSD">Android KitKat не предоставляет возможности сохранения на внешнюю карту памяти.</string>
+    <string name="pref_general_more_sonyCamera_available">Использование камер Sony доступно только с Стандартном и Видео режимах.</string>
     
     <string name="pref_timestamp_saving_date_title">Дата</string>
     <string name="pref_timestamp_saving_abbreviation_title">Месяц буквами</string>
@@ -64,4 +73,7 @@
     
     <string name="raterSendReview"> Нам важно ваше мнение и мы хотим улучшить приложение. Отправьте ваше мнение напрямую в поддержку.</string>
     <string name="raterSend">Отправить</string>
+    <string name="string_appoftheday">Благодаря Приложению дня теперь у вас есть полная версия</string>
+    
+    <string name="string_processing_and_saving_image">Обработка и сохранение изображения...</string>
 </resources>

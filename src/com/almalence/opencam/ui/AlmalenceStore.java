@@ -28,16 +28,20 @@ import java.util.HashMap;
 import java.util.List;
 
 /* <!-- +++
+ import com.almalence.opencam_plus.ApplicationInterface;
  import com.almalence.opencam_plus.MainScreen;
  import com.almalence.opencam_plus.PluginManager;
  import com.almalence.opencam_plus.R;
+ import com.almalence.opencam_plus.cameracontroller.CameraController;
  +++ --> */
 // <!-- -+-
+import com.almalence.opencam.ApplicationInterface;
 import com.almalence.opencam.MainScreen;
 import com.almalence.opencam.PluginManager;
 import com.almalence.opencam.R;
 import com.almalence.opencam.cameracontroller.CameraController;
 //-+- -->
+
 import com.almalence.ui.RotateImageView;
 
 import android.content.SharedPreferences;
@@ -65,7 +69,7 @@ public class AlmalenceStore
 	private HashMap<View, Integer>	buttonStoreViewAssoc;
 	private View					guiView;
 
-	private static final int STORE_ELEMENTS_NUMBER = 7;
+	private static final int STORE_ELEMENTS_NUMBER = 6;
 	
 	AlmalenceStore(View gui)
 	{
@@ -168,8 +172,8 @@ public class AlmalenceStore
 		guiView.findViewById(R.id.buttonShutter).setEnabled(false);
 		guiView.findViewById(R.id.buttonSelectMode).setEnabled(false);
 
-		PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, 
-				PluginManager.MSG_CONTROL_LOCKED);
+		PluginManager.getInstance().sendMessage(ApplicationInterface.MSG_BROADCAST, 
+				ApplicationInterface.MSG_CONTROL_LOCKED);
 
 		MainScreen.getGUIManager().lockControls = true;
 
@@ -226,8 +230,8 @@ public class AlmalenceStore
 		guiView.findViewById(R.id.buttonShutter).setEnabled(true);
 		guiView.findViewById(R.id.buttonSelectMode).setEnabled(true);
 
-		PluginManager.getInstance().sendMessage(PluginManager.MSG_BROADCAST, 
-				PluginManager.MSG_CONTROL_UNLOCKED);
+		PluginManager.getInstance().sendMessage(ApplicationInterface.MSG_BROADCAST, 
+				ApplicationInterface.MSG_CONTROL_UNLOCKED);
 
 		MainScreen.getGUIManager().lockControls = false;
 	}
@@ -253,7 +257,7 @@ public class AlmalenceStore
 			{
 			case 0:
 				// unlock all
-				icon.setImageResource(R.drawable.store_all);
+				icon.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.store_all));
 				description.setText(MainScreen.getAppResources()
 						.getString(R.string.Pref_Upgrde_All_Preference_Title));
 
@@ -274,19 +278,8 @@ public class AlmalenceStore
 				}
 				break;
 			case 1:
-				// subscription year
-				icon.setImageResource(R.drawable.store_subscription);
-				description.setText(MainScreen.getAppResources()
-						.getString(R.string.Pref_Upgrde_SubscriptionYear_Preference_Title));
-				if (MainScreen.getInstance().isPurchasedUnlockAllSubscriptionYear() || MainScreen.getInstance().isPurchasedAll())
-					price.setText(R.string.already_unlocked);
-				else
-					price.setText(MainScreen.getInstance().titleSubscriptionYear+"/"+MainScreen.getAppResources()
-							.getString(R.string.Pref_Upgrde_SubscriptionYear_Year));
-				break;
-			case 2:
 				// Super
-				icon.setImageResource(R.drawable.store_super);
+				icon.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.store_super));
 				description.setText(MainScreen.getAppResources()
 						.getString(R.string.Pref_Upgrde_Super_Preference_Title));
 				if (MainScreen.getInstance().isPurchasedSuper() || MainScreen.getInstance().isPurchasedAll())
@@ -300,9 +293,9 @@ public class AlmalenceStore
 								.getString(R.string.Pref_Upgrde_SuperNotSupported));
 				}
 				break;
-			case 3:
+			case 2:
 				// HDR
-				icon.setImageResource(R.drawable.store_hdr);
+				icon.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.store_hdr));
 				description.setText(MainScreen.getAppResources()
 						.getString(R.string.Pref_Upgrde_HDR_Preference_Title));
 				if (MainScreen.getInstance().isPurchasedHDR() || MainScreen.getInstance().isPurchasedAll())
@@ -310,9 +303,9 @@ public class AlmalenceStore
 				else
 					price.setText(MainScreen.getInstance().titleUnlockHDR);
 				break;
-			case 4:
+			case 3:
 				// Panorama
-				icon.setImageResource(R.drawable.store_panorama);
+				icon.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.store_panorama));
 				description.setText(MainScreen.getAppResources()
 						.getString(R.string.Pref_Upgrde_Panorama_Preference_Title));
 				if (MainScreen.getInstance().isPurchasedPanorama() || MainScreen.getInstance().isPurchasedAll())
@@ -320,19 +313,19 @@ public class AlmalenceStore
 				else
 					price.setText(MainScreen.getInstance().titleUnlockPano);
 				break;
-			case 5:
+			case 4:
 				// multishot
-				icon.setImageResource(R.drawable.store_moving);
+				icon.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.store_moving));
 				description.setText(MainScreen.getAppResources()
 						.getString(R.string.Pref_Upgrde_Moving_Preference_Title));
-				if (MainScreen.getInstance().isPurchasedMoving() || MainScreen.getInstance().isPurchasedAll())
+				if (MainScreen.getInstance().isPurchasedMultishots() || MainScreen.getInstance().isPurchasedAll())
 					price.setText(R.string.already_unlocked);
 				else
 					price.setText(MainScreen.getInstance().titleUnlockMoving);
 				break;
-			case 6:
+			case 5:
 				// Promo code
-				icon.setImageResource(R.drawable.store_promo);
+				icon.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.store_promo));
 				description.setText(MainScreen.getAppResources()
 						.getString(R.string.Pref_Upgrde_PromoCode_Preference_Title));
 				if (MainScreen.getInstance().isPurchasedAll())
@@ -373,25 +366,22 @@ public class AlmalenceStore
 		case 0:// unlock all
 			MainScreen.getInstance().purchaseAll();
 			break;
-		case 1:// Year subscription
-			MainScreen.getInstance().purchasedUnlockAllSubscriptionYear();
-			break;
-		case 2:// HDR
+		case 1:// HDR
 			if (CameraController.isSuperModePossible())
 				MainScreen.getInstance().purchaseSuper();
 			else
 				Toast.makeText(MainScreen.getMainContext(), "Not supported", Toast.LENGTH_LONG).show();
 			break;
-		case 3:// HDR
+		case 2:// HDR
 			MainScreen.getInstance().purchaseHDR();
 			break;
-		case 4:// Panorama
+		case 3:// Panorama
 			MainScreen.getInstance().purchasePanorama();
 			break;
-		case 5:// multishot
+		case 4:// multishot
 			MainScreen.getInstance().purchaseMultishot();
 			break;
-		case 6:// Promo
+		case 5:// Promo
 			if (!MainScreen.getInstance().isPurchasedAll())
 				MainScreen.getInstance().enterPromo();
 			break;
@@ -409,7 +399,7 @@ public class AlmalenceStore
 		SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(MainScreen.getMainContext());
 		boolean bOnSale = prefs.getBoolean("bOnSale", false);
 		final RotateImageView unlock = ((RotateImageView) guiView.findViewById(R.id.Unlock));
-		unlock.setImageResource(bOnSale ? R.drawable.unlock_sale : R.drawable.unlock);
+		unlock.setImageDrawable(MainScreen.getAppResources().getDrawable(bOnSale ? R.drawable.unlock_sale : R.drawable.unlock));
 		unlock.setAlpha(1.0f);
 		unlock.setVisibility(View.VISIBLE);
 
@@ -423,7 +413,7 @@ public class AlmalenceStore
 			public void onAnimationEnd(Animation animation)
 			{
 				unlock.clearAnimation();
-				unlock.setImageResource(R.drawable.unlock_gray);
+				unlock.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.unlock_gray));
 				unlock.setAlpha(0.4f);
 			}
 
@@ -446,7 +436,7 @@ public class AlmalenceStore
 		final RotateImageView unlock = ((RotateImageView) guiView.findViewById(R.id.Unlock));
 		if (unlock.getVisibility() == View.VISIBLE)
 			return;
-		unlock.setImageResource(R.drawable.unlock_gray);
+		unlock.setImageDrawable(MainScreen.getAppResources().getDrawable(R.drawable.unlock_gray));
 		unlock.setAlpha(0.4f);
 		unlock.setVisibility(View.VISIBLE);
 	}

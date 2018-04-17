@@ -27,13 +27,11 @@ import android.view.Display;
 import android.view.WindowManager;
 
 /* <!-- +++
-import com.almalence.opencam_plus.MainScreen;
+import com.almalence.opencam_plus.ApplicationScreen;
 +++ --> */
 //<!-- -+-
-import com.almalence.opencam.MainScreen;
+import com.almalence.opencam.ApplicationScreen;
 //-+- -->
-
-import com.almalence.plugins.processing.groupshot.AlmaShotSeamless;
 
 public class ImageConversion
 {
@@ -53,6 +51,8 @@ public class ImageConversion
 			int outHeight);
 	
 	public static native void addCornersRGBA8888(byte[] rgb_out, int outWidth, int outHeight);
+	
+	public static synchronized native int[] NV21toARGB(int inptr, Size src, Rect rect, Size dst);
 
 	
 	static
@@ -85,7 +85,7 @@ public class ImageConversion
 		options.inJustDecodeBounds = true;
 		BitmapFactory.decodeByteArray(data, 0, data.length, options);
 
-		Display display = ((WindowManager) MainScreen.getInstance().getSystemService(Context.WINDOW_SERVICE))
+		Display display = ((WindowManager) ApplicationScreen.instance.getSystemService(Context.WINDOW_SERVICE))
 				.getDefaultDisplay();
 		int mDisplayWidth = display.getHeight();
 		int mDisplayHeight = display.getWidth();
@@ -129,12 +129,13 @@ public class ImageConversion
 		return bitmap;
 	}
 
+	// Convert YUV to Bitmap. Width and height of bitmap are as close as possible to screen size.
 	public static Bitmap decodeYUVfromBuffer(int yuv, int width, int height)
 	{
 		Size mInputFrameSize = new Size(width, height);
 		Size mOutputFrameSize = null;
 		
-		Display display = ((WindowManager) MainScreen.getInstance().getSystemService(Context.WINDOW_SERVICE))
+		Display display = ((WindowManager) ApplicationScreen.instance.getSystemService(Context.WINDOW_SERVICE))
 				.getDefaultDisplay();
 		int mDisplayWidth = display.getHeight();
 		int mDisplayHeight = display.getWidth();
@@ -162,7 +163,7 @@ public class ImageConversion
 //		Log.e("ImageConversion", "decodeYUVfromBuffer. width = " + width + " height = " + height);
 //		Log.e("ImageConversion", "decode to width = " + scaledWidth + " height = " + scaledHeight);
 		Rect rect = new Rect(0, 0, width, height);		
-		Bitmap bitmap = Bitmap.createBitmap(AlmaShotSeamless.NV21toARGB(yuv, mInputFrameSize, rect, mOutputFrameSize), scaledWidth, scaledHeight, Config.ARGB_8888);
+		Bitmap bitmap = Bitmap.createBitmap(NV21toARGB(yuv, mInputFrameSize, rect, mOutputFrameSize), scaledWidth, scaledHeight, Config.ARGB_8888);
 		
 //		File saveDir = PluginManager.getSaveDir(false);
 //		Calendar d = Calendar.getInstance();

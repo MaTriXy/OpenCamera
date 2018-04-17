@@ -52,6 +52,7 @@ extern "C"
 #define restrict
 #endif
 
+#include <stdint.h>
 typedef int Int32;
 typedef short Int16;
 typedef unsigned int Uint32;
@@ -248,8 +249,6 @@ void AlmaShot_ResumeProcessing(void);
 int AlmaShot_MeasureProcessingTimeSuperZoom(int sx, int sy);
 int AlmaShot_MeasureProcessingTimeHdr(int sx, int sy);
 int AlmaShot_MeasureProcessingTimeBlurLess(int sx, int sy);
-
-
 
 
 #if defined __cplusplus

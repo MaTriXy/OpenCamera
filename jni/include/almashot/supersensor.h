@@ -53,19 +53,22 @@ extern "C"
 
 int Super_Process
 (
-	Uint8 ** in,
+	Uint8 ** inY,
+	Uint8 ** inUV,
 	Uint8 ** pout,
+	Uint8 ** poutUV,
 	int		sx,
 	int		sy,
+	int		stride,
 	int		sxo,
 	int		syo,
+	int		ostride,
 	int		nFrames,
-	int     SensorGain,
-	int     DeGhostGain,
-	int     DeGhostFrames,
+	int     iso,
 	int		postFilter,
 	int		postSharpen,
-	int		gamma,
+	float 	gamma,
+	float	LargeZoomNNetLevel,
 	int     cameraIndex,
 	int     externalBuffers
 );
